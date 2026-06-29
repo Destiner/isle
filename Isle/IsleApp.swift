@@ -6,27 +6,17 @@
 //
 
 import SwiftUI
-import SwiftData
 
 @main
 struct IsleApp: App {
-    var sharedModelContainer: ModelContainer = {
-        let schema = Schema([
-            Item.self,
-        ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-
-        do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
-        } catch {
-            fatalError("Could not create ModelContainer: \(error)")
-        }
-    }()
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     var body: some Scene {
-        WindowGroup {
-            ContentView()
+        // No visible scene: Isle lives as a borderless floating fragment,
+        // managed imperatively by AppDelegate. `Settings` provides a valid
+        // (and hidden-until-invoked) scene without spawning a window on launch.
+        Settings {
+            EmptyView()
         }
-        .modelContainer(sharedModelContainer)
     }
 }
