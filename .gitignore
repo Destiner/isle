@@ -1,0 +1,11 @@
+# Xcode / build
+DerivedData/
+build/
+*.xcuserstate
+xcuserdata/
+
+# Profiling / coverage artifacts
+*.profraw
+
+# macOS
+.DS_Store

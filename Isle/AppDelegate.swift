@@ -10,6 +10,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var panel: FragmentPanel?
     private let fnMonitor = FnKeyMonitor()
     private let state = IslandState()
+    private let dictation = DictationManager()
 
     private let pillSize = CGSize(width: 150, height: 40)
     private let topRoom: CGFloat = 30     // headroom above the pill for the animation
@@ -35,9 +36,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel.setContentSize(panelSize)
         self.panel = panel
 
-        // Hold fn / 🌐 to peek the fragment; release to hide it.
+        // Load (and download on first run) the transcription model.
+        dictation.prepare()
+
+        // Hold fn / 🌐 to peek the fragment and dictate; release to hide and transcribe.
         fnMonitor.onChange = { [weak self] pressed in
-            pressed ? self?.show() : self?.hide()
+            guard let self else { return }
+            if pressed {
+                self.show()
+                self.dictation.startRecording()
+            } else {
+                self.hide()
+                self.dictation.finishAndPaste()
+            }
         }
         fnMonitor.start()
     }
