@@ -22,6 +22,12 @@ final class AudioRecorder {
             lock.lock(); defer { samples.removeAll(keepingCapacity: true); lock.unlock() }
             return samples
         }
+
+        /// A copy of the samples captured so far, leaving the buffer intact.
+        func snapshot() -> [Float] {
+            lock.lock(); defer { lock.unlock() }
+            return samples
+        }
     }
 
     private let engine = AVAudioEngine()
@@ -63,6 +69,10 @@ final class AudioRecorder {
         try engine.start()
         isRecording = true
     }
+
+    /// The audio captured so far, without stopping or clearing the buffer.
+    /// Used for live partial transcription while recording is ongoing.
+    func snapshot() -> [Float] { box.snapshot() }
 
     /// Stops recording and returns the captured 16 kHz mono samples.
     func stop() -> [Float] {

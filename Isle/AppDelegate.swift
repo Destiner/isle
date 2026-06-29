@@ -14,11 +14,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private let pillSize = CGSize(width: 150, height: 40)
     private let topRoom: CGFloat = 30     // headroom above the pill for the animation
-    private let bottomRoom: CGFloat = 12  // breathing room / shadow below
     private let topGap: CGFloat = 6       // gap between the notch and the resting pill
 
+    // The panel is sized to fit the fully expanded pill (with live transcript),
+    // not just the resting state. Empty SwiftUI regions don't capture clicks, so
+    // the extra transparent area below the notch stays click-through.
+    private let expandedWidth: CGFloat = 380   // width the transcript wraps at
+    private let panelWidth: CGFloat = 420
+    private let panelHeight: CGFloat = 440
+
     private var panelSize: NSSize {
-        NSSize(width: pillSize.width, height: pillSize.height + topRoom + bottomRoom)
+        NSSize(width: panelWidth, height: panelHeight)
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -30,6 +36,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 state: state,
                 pillSize: pillSize,
                 topRoom: topRoom,
+                expandedWidth: expandedWidth,
                 onQuit: { NSApp.terminate(nil) }
             )
         )
@@ -38,6 +45,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Load (and download on first run) the transcription model.
         dictation.prepare()
+
+        // Stream recognized speech into the pill as the user talks.
+        dictation.onPartialTranscript = { [weak self] text in
+            self?.state.update(transcript: text)
+        }
 
         // Hold fn / 🌐 to peek the fragment and dictate; release to hide and transcribe.
         fnMonitor.onChange = { [weak self] pressed in
@@ -63,21 +75,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func hide() {
         state.isOpen = false
-        // Keep the panel on screen until the collapse animation finishes.
+        // Keep the panel on screen until the collapse animation finishes, then
+        // hide it and drop the transcript so it never flashes on the next open.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
             guard let self, !self.state.isOpen else { return }
             self.panel?.orderOut(nil)
+            self.state.clearTranscript()
         }
     }
 
-    /// Center horizontally so the pill rests just below the notch. The panel
-    /// extends `topRoom` above the pill, so account for that when placing it.
+    /// Center horizontally so the pill's top edge rests just below the notch.
+    /// The pill sits `topRoom` below the panel's top edge (headroom for the
+    /// emerge animation), and the panel grows downward from there, so the
+    /// origin is derived from the panel height rather than the pill height.
     private func positionBelowNotch(_ panel: NSPanel) {
         guard let screen = NSScreen.main else { return }
         let visible = screen.visibleFrame
         let origin = NSPoint(
             x: visible.midX - panel.frame.width / 2,
-            y: visible.maxY - topGap - (pillSize.height + bottomRoom)
+            y: visible.maxY - topGap + topRoom - panel.frame.height
         )
         panel.setFrameOrigin(origin)
     }

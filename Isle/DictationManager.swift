@@ -17,6 +17,16 @@ final class DictationManager {
     private var asr: AsrManager?
     private var isTranscribing = false
 
+    /// Live partial transcript updates while recording, on the main actor.
+    var onPartialTranscript: ((String) -> Void)?
+
+    /// How often the accumulating buffer is re-transcribed for a live preview.
+    private let partialInterval: Duration = .milliseconds(350)
+    /// Parakeet rejects clips shorter than 0.3 s; require a touch more.
+    private let minPartialSamples = 16_000 * 4 / 10  // 0.4 s at 16 kHz
+    private var partialTask: Task<Void, Never>?
+    private var partialInFlight = false
+
     /// Requests mic access and loads (downloading on first run) the English
     /// Parakeet v2 model. Safe to call once at launch; runs in the background.
     func prepare() {
@@ -43,17 +53,21 @@ final class DictationManager {
             try recorder.start()
         } catch {
             NSLog("Isle: failed to start recording: \(error)")
+            return
         }
+        onPartialTranscript?("")
+        startPartialLoop()
     }
 
     /// Stops recording, transcribes, and pastes the result into the active app.
     func finishAndPaste() {
+        partialTask?.cancel()
+        partialTask = nil
+
         let samples = recorder.stop()
-        guard let asr, !isTranscribing, !samples.isEmpty else { return }
-        isTranscribing = true
+        guard let asr, !samples.isEmpty else { return }
 
         Task {
-            defer { isTranscribing = false }
             do {
                 var state = TdtDecoderState.make(decoderLayers: await asr.decoderLayerCount)
                 let result = try await asr.transcribe(samples, decoderState: &state)
@@ -63,6 +77,38 @@ final class DictationManager {
             } catch {
                 NSLog("Isle: transcription failed: \(error)")
             }
+        }
+    }
+
+    /// Periodically re-transcribes the whole accumulated buffer while recording,
+    /// emitting the running text so the UI can show speech as it's recognized.
+    /// Re-transcribing from scratch (fresh decoder state) keeps the text clean
+    /// without token-stitching; utterances are short enough that it stays fast.
+    private func startPartialLoop() {
+        partialTask?.cancel()
+        partialTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: self?.partialInterval ?? .milliseconds(350))
+                if Task.isCancelled { return }
+                await self?.emitPartialTranscript()
+            }
+        }
+    }
+
+    private func emitPartialTranscript() async {
+        guard let asr, !partialInFlight else { return }
+        let samples = recorder.snapshot()
+        guard samples.count >= minPartialSamples else { return }
+
+        partialInFlight = true
+        defer { partialInFlight = false }
+        do {
+            var state = TdtDecoderState.make(decoderLayers: await asr.decoderLayerCount)
+            let result = try await asr.transcribe(samples, decoderState: &state)
+            guard !Task.isCancelled, recorder.isRecording else { return }
+            onPartialTranscript?(result.text.trimmingCharacters(in: .whitespacesAndNewlines))
+        } catch {
+            // Transient (e.g. too-short clip mid-stream); the next tick retries.
         }
     }
 

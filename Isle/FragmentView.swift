@@ -5,10 +5,132 @@
 
 import SwiftUI
 import Combine
+import AppKit
 
-/// Drives the open/close animation. Toggled by the fn key in AppDelegate.
+/// A single recognized word plus when the model last wrote or rewrote it,
+/// so freshly-changed words can be highlighted and fade to gray over time.
+struct TranscriptWord: Identifiable {
+    let id: Int          // position in the transcript
+    var text: String
+    var changedAt: Date
+}
+
+/// Shared text metrics so the on-screen line wrapping (`TranscriptText`) and the
+/// line-break pacing (`IslandState`) agree on exactly where lines break.
+enum TranscriptMetrics {
+    static let fontSize: CGFloat = 14
+    static let lineSpacing: CGFloat = 2
+
+    static let font: NSFont = {
+        let base = NSFont.systemFont(ofSize: fontSize, weight: .regular)
+        if let descriptor = base.fontDescriptor.withDesign(.rounded) {
+            return NSFont(descriptor: descriptor, size: fontSize) ?? base
+        }
+        return base
+    }()
+
+    static var lineHeight: CGFloat { ceil(font.ascender - font.descender) }
+    static func width(_ text: String) -> CGFloat {
+        (text as NSString).size(withAttributes: [.font: font]).width
+    }
+    static let spaceWidth: CGFloat = width(" ")
+}
+
+/// Drives the open/close animation and holds the live transcript.
+/// Toggled by the fn key in AppDelegate.
 final class IslandState: ObservableObject {
     @Published var isOpen = false
+    /// Recognized speech as positioned words, each stamped with its last change.
+    @Published private(set) var words: [TranscriptWord] = []
+
+    /// Wrap width (pill width minus padding); set by the view once laid out.
+    var availableTextWidth: CGFloat = 344
+
+    // Staged reveal: queued words plus the width used by the current bottom line.
+    private var pending: [TranscriptWord] = []
+    private var currentLineWidth: CGFloat = 0
+    private var staging = false
+
+    var hasTranscript: Bool { !words.isEmpty }
+
+    func clearTranscript() {
+        words = []
+        pending = []
+        currentLineWidth = 0
+        staging = false
+    }
+
+    /// Append-only reconciliation: the live preview only grows with genuinely
+    /// new words and never rewrites what's already shown. The model revises
+    /// earlier words as it hears more, but folding those corrections in here
+    /// would re-wrap the lines and re-brighten settled text — distracting, and
+    /// the corrections still reach the final paste. So we freeze the shown
+    /// prefix and only stamp the newly appended words, then reveal them in
+    /// staged steps so a line-fill and a new-line spill never share a frame.
+    func update(transcript: String) {
+        let tokens = transcript.split(whereSeparator: { $0.isWhitespace }).map(String.init)
+        let known = words.count + pending.count
+        guard tokens.count > known else { return }
+
+        let appended = tokens[known...].enumerated().map { offset, token in
+            TranscriptWord(id: known + offset, text: String(token), changedAt: Date())
+        }
+        pending.append(contentsOf: appended)
+        startStaged()
+    }
+
+    private func startStaged() {
+        guard !staging else { return }
+        staging = true
+        stepStaged()
+    }
+
+    /// One frame of staged reveal. If the next word fits the current line, reveal
+    /// every word that fits at once (the bottom line just grows — no scroll, so
+    /// batching is smooth). Otherwise reveal only the single word that starts a
+    /// new line, isolating the scroll so the line above it is already settled.
+    private func stepStaged() {
+        guard let next = pending.first else { staging = false; return }
+
+        if fitsOnCurrentLine(next.text) {
+            revealFittingWords()
+            scheduleNextStep(after: 0.06)   // brief gap before the line break
+        } else {
+            revealOne()                     // starts a new line → triggers scroll
+            scheduleNextStep(after: 0.3)    // let the scroll settle first
+        }
+    }
+
+    private func fitsOnCurrentLine(_ text: String) -> Bool {
+        currentLineWidth == 0
+            || currentLineWidth + TranscriptMetrics.spaceWidth + TranscriptMetrics.width(text) <= availableTextWidth
+    }
+
+    private func revealFittingWords() {
+        let now = Date()
+        while let next = pending.first, fitsOnCurrentLine(next.text) {
+            var word = pending.removeFirst()
+            word.changedAt = now
+            words.append(word)
+            let w = TranscriptMetrics.width(word.text)
+            currentLineWidth = currentLineWidth == 0 ? w : currentLineWidth + TranscriptMetrics.spaceWidth + w
+        }
+    }
+
+    private func revealOne() {
+        guard !pending.isEmpty else { return }
+        var word = pending.removeFirst()
+        word.changedAt = Date()
+        words.append(word)
+        currentLineWidth = TranscriptMetrics.width(word.text)
+    }
+
+    private func scheduleNextStep(after delay: TimeInterval) {
+        guard !pending.isEmpty else { staging = false; return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+            self?.stepStaged()
+        }
+    }
 }
 
 /// A standalone Dynamic Island-style pill that springs out from under the
@@ -20,12 +142,15 @@ struct FragmentView: View {
     @ObservedObject var state: IslandState
     var pillSize: CGSize
     var topRoom: CGFloat
+    /// Width the transcript wraps at once text starts arriving.
+    var expandedWidth: CGFloat
     var onQuit: () -> Void
 
+    private let textPadding: CGFloat = 18
+    private var hasText: Bool { state.hasTranscript }
+
     var body: some View {
-        ListeningIndicator(active: state.isOpen)
-            .frame(width: pillSize.width, height: pillSize.height)
-            .background(.black, in: Capsule(style: .continuous))
+        pill
             // Grow downward from the top edge so it reads as emerging from the notch.
             .scaleEffect(state.isOpen ? 1 : 0.3, anchor: .top)
             .offset(y: state.isOpen ? 0 : -20)
@@ -33,7 +158,159 @@ struct FragmentView: View {
             .padding(.top, topRoom)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .animation(.spring(response: 0.34, dampingFraction: 0.7), value: state.isOpen)
+            .animation(.spring(response: 0.38, dampingFraction: 0.82), value: state.words.count)
+            .onAppear { state.availableTextWidth = expandedWidth - 2 * textPadding }
             .contextMenu { Button("Quit Isle", action: onQuit) }
+    }
+
+    /// The capsule itself: a compact "Listening" pill that grows into a rounded
+    /// card as recognized text streams in.
+    private var pill: some View {
+        // Center-aligned so the "Listening" indicator stays centered as the pill
+        // widens; the transcript keeps its own full-width leading frame below.
+        VStack(alignment: .center, spacing: 10) {
+            ListeningIndicator(active: state.isOpen)
+
+            if hasText {
+                TranscriptText(
+                    words: state.words,
+                    availableWidth: expandedWidth - 2 * textPadding
+                )
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .transition(.opacity)
+            }
+        }
+        .padding(.horizontal, textPadding)
+        .padding(.vertical, hasText ? 16 : 0)
+        .frame(minWidth: pillSize.width, minHeight: pillSize.height)
+        .frame(maxWidth: hasText ? expandedWidth : nil, alignment: .leading)
+        .background(.black, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+    }
+}
+
+/// One laid-out line of the transcript. The id is the line's position, so as
+/// new lines are appended the earlier lines keep a stable identity and SwiftUI
+/// reuses (rather than rebuilds) them — giving the teleprompter scroll.
+private struct TranscriptLine: Identifiable {
+    let id: Int
+    let words: [TranscriptWord]
+}
+
+/// Renders the transcript like a reverse teleprompter: words are packed into
+/// fixed lines (our own greedy wrapping), only the most recent two lines show,
+/// and as a new line forms the stack translates up by exactly one line so the
+/// older line scrolls off the top instead of the whole block re-wrapping.
+///
+/// Each word also carries a recency highlight: bright when the model just wrote
+/// or rewrote it, holding briefly, then easing to gray. The fade is driven by a
+/// `TimelineView` so it's purely time-based.
+private struct TranscriptText: View {
+    var words: [TranscriptWord]
+    /// Text width to wrap at (pill width minus its horizontal padding).
+    var availableWidth: CGFloat
+
+    // Hold bright briefly, then snap to gray over a short window.
+    private let hold: TimeInterval = 1.0
+    private let fade: TimeInterval = 0.5
+    private let freshOpacity = 1.0
+    private let agedOpacity = 0.4
+
+    private let visibleLines = 2
+
+    private var fontSize: CGFloat { TranscriptMetrics.fontSize }
+    private var lineSpacing: CGFloat { TranscriptMetrics.lineSpacing }
+    private var lineHeight: CGFloat { TranscriptMetrics.lineHeight }
+    /// Vertical distance to scroll when one line is added.
+    private var rowStride: CGFloat { lineHeight + lineSpacing }
+
+    var body: some View {
+        let lines = layoutLines()
+        let scrolling = lines.count > visibleLines
+
+        // Two crisp lines, plus one extra "ghost" line above while scrolling that
+        // the top gradient dissolves — so the outgoing line fades out instead of
+        // being hard-clipped at the pill edge (which read as a jarring jump).
+        let crispCount = min(lines.count, visibleLines)
+        let crispHeight = CGFloat(crispCount) * lineHeight
+            + CGFloat(max(0, crispCount - 1)) * lineSpacing
+        let fadeZone = scrolling ? rowStride : 0
+        let viewportHeight = crispHeight + fadeZone
+
+        let shown = visibleLines + (scrolling ? 1 : 0)
+        let linesAbove = max(0, lines.count - shown)
+
+        TimelineView(.periodic(from: .now, by: 1.0 / 30.0)) { context in
+            VStack(alignment: .leading, spacing: lineSpacing) {
+                ForEach(lines) { line in
+                    lineView(line, at: context.date)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .offset(y: -CGFloat(linesAbove) * rowStride)
+        }
+        .frame(height: viewportHeight, alignment: .top)
+        .mask(topFadeMask(fadeZone: fadeZone))
+        .animation(.spring(response: 0.3, dampingFraction: 0.88), value: lines.count)
+    }
+
+    /// Opaque over the crisp lines; a clear→opaque ramp over the top fade zone so
+    /// content dissolves as it scrolls up and out.
+    private func topFadeMask(fadeZone: CGFloat) -> some View {
+        VStack(spacing: 0) {
+            if fadeZone > 0 {
+                LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom)
+                    .frame(height: fadeZone)
+            }
+            Color.black
+        }
+    }
+
+    /// Greedy line breaking over the measured word widths. Deterministic, so an
+    /// unchanged prefix of words always yields the same earlier lines.
+    private func layoutLines() -> [TranscriptLine] {
+        guard availableWidth > 0 else { return [TranscriptLine(id: 0, words: words)] }
+        let spaceWidth = TranscriptMetrics.spaceWidth
+
+        var lines: [[TranscriptWord]] = []
+        var current: [TranscriptWord] = []
+        var width: CGFloat = 0
+
+        for word in words {
+            let wordWidth = TranscriptMetrics.width(word.text)
+            let projected = current.isEmpty ? wordWidth : width + spaceWidth + wordWidth
+            if !current.isEmpty && projected > availableWidth {
+                lines.append(current)
+                current = [word]
+                width = wordWidth
+            } else {
+                current.append(word)
+                width = projected
+            }
+        }
+        if !current.isEmpty { lines.append(current) }
+
+        return lines.enumerated().map { TranscriptLine(id: $0.offset, words: $0.element) }
+    }
+
+    private func lineView(_ line: TranscriptLine, at now: Date) -> some View {
+        var attributed = AttributedString()
+        for (index, word) in line.words.enumerated() {
+            let separator = index == line.words.count - 1 ? "" : " "
+            var run = AttributedString(word.text + separator)
+            run.foregroundColor = .white.opacity(opacity(for: word, at: now))
+            attributed += run
+        }
+        return Text(attributed)
+            .font(.system(size: fontSize, weight: .regular, design: .rounded))
+            .lineLimit(1)
+            .fixedSize()
+    }
+
+    private func opacity(for word: TranscriptWord, at now: Date) -> Double {
+        let age = now.timeIntervalSince(word.changedAt)
+        let t = min(max((age - hold) / fade, 0), 1)
+        let eased = t * t * (3 - 2 * t)  // smoothstep
+        return freshOpacity + (agedOpacity - freshOpacity) * eased
     }
 }
 
@@ -83,12 +360,14 @@ private struct ListeningIndicator: View {
 #Preview {
     let state = IslandState()
     state.isOpen = true
+    state.update(transcript: "this is the speech being recognized in real time as I talk")
     return FragmentView(
         state: state,
         pillSize: CGSize(width: 150, height: 40),
         topRoom: 30,
+        expandedWidth: 360,
         onQuit: {}
     )
-    .frame(width: 240, height: 90)
+    .frame(width: 420, height: 300)
     .background(.gray)
 }

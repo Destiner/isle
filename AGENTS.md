@@ -1,6 +1,6 @@
 # Isle
 
-macOS menu-bar-less agent app. Holding the fn / 🌐 key shows a Dynamic Island-style clock pill *and* records the mic; on release it transcribes the speech locally (Parakeet) and copies the text to the clipboard.
+macOS menu-bar-less agent app. Holding the fn / 🌐 key shows a Dynamic Island-style pill *and* records the mic, streaming the recognized speech into the pill live (a two-line reverse-teleprompter); on release it transcribes the full clip locally (Parakeet) and pastes the text into the active app.
 
 ## Commands
 
@@ -18,17 +18,18 @@ macOS menu-bar-less agent app. Holding the fn / 🌐 key shows a Dynamic Island-
 - `Isle/IsleApp.swift` - `@main` entry; no real scene (`Settings {}`), delegates to AppDelegate
 - `Isle/AppDelegate.swift` - Lifecycle, panel placement, show/hide, layout constants, fn wiring
 - `Isle/FragmentPanel.swift` - Borderless non-activating floating `NSPanel`
-- `Isle/FragmentView.swift` - The pill UI + emerge/retract animation (`IslandState`)
+- `Isle/FragmentView.swift` - The pill UI: emerge/retract animation, the live transcript teleprompter, and `IslandState` (transcript model + staged reveal)
 - `Isle/FnKeyMonitor.swift` - Global fn-key press/release detection
-- `Isle/AudioRecorder.swift` - Mic capture, resampled to 16 kHz mono Float via `AVAudioConverter`
-- `Isle/DictationManager.swift` - Loads Parakeet (FluidAudio), transcribes, copies to clipboard
+- `Isle/AudioRecorder.swift` - Mic capture, resampled to 16 kHz mono Float via `AVAudioConverter`; `snapshot()` reads the buffer mid-recording for live partials
+- `Isle/DictationManager.swift` - Loads Parakeet (FluidAudio), re-transcribes the growing buffer on a timer for the live preview, and pastes the final transcript on release
 
 ## Patterns
 
 - Background agent: `LSUIElement = YES` + `setActivationPolicy(.accessory)`, so no Dock icon or menu bar. Quit via right-click on the pill.
 - The panel is intentionally taller than the pill (`topRoom`/`bottomRoom` in AppDelegate) so the animation can render outside the pill without being clipped by the window bounds.
 - fn is a hardware modifier, not a key, so it's detected via `NSEvent` `.flagsChanged` keyed on `kVK_Function` — not a Carbon hotkey.
-- Dictation uses Parakeet **v2** (English-only) via `AsrModels.downloadAndLoad(version: .v2)`; switch to `.v3` for multilingual. Transcription is batch (record while held → transcribe on release), no VAD.
+- Dictation uses Parakeet **v2** (English-only) via `AsrModels.downloadAndLoad(version: .v2)`; switch to `.v3` for multilingual. No VAD.
+- Live preview: the whole buffer is re-transcribed from scratch every ~350 ms (fresh decoder state) — clean text, no token-stitching. The preview is **append-only** (the shown prefix is frozen; the model's corrections to earlier words are dropped from the UI but still reach the final paste). Words are revealed in **staged** steps so a line-fill and a new-line spill never share a frame, and the two-line viewport masks its top edge so the outgoing line dissolves instead of hard-clipping. `IslandState` and `TranscriptText` share `TranscriptMetrics` so the pacing and the rendered wrapping break lines at the same spots.
 
 ## Gotchas
 
