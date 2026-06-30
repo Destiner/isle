@@ -6,9 +6,9 @@
 import AppKit
 import SwiftUI
 
-/// How the user composes a request. Text is the default; voice is kept wired but
-/// unused for now (flip this constant to bring it back).
-enum InputMode {
+/// How the user composes a request. The two modes are switched live with Tab
+/// while the pill is open; the last-used mode is remembered across launches.
+enum InputMode: String {
     case voice
     case text
 }
@@ -19,7 +19,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let state = IslandState()
     private let dictation = DictationManager()
 
-    private let mode: InputMode = .text
+    // The last-used input mode, persisted so a relaunch restores it.
+    private static let modeKey = "inputMode"
 
     // After this long with the pill closed, the conversation is cleared so the
     // next open starts fresh. Armed on hide, cancelled on show.
@@ -45,10 +46,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Background agent: no Dock icon, no menu bar.
         NSApp.setActivationPolicy(.accessory)
 
+        // Restore the last-used mode (default to text on first launch).
+        state.mode = UserDefaults.standard.string(forKey: Self.modeKey)
+            .flatMap(InputMode.init(rawValue:)) ?? .text
+
         let panel = FragmentPanel(
             rootView: FragmentView(
                 state: state,
-                mode: mode,
                 pillSize: pillSize,
                 topRoom: topRoom,
                 expandedWidth: expandedWidth,
@@ -60,7 +64,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.panel = panel
 
         // Voice only: load (and download on first run) the transcription model.
-        if mode == .voice {
+        // (prepare() is idempotent, so the lazy load on a later Tab switch is safe.)
+        if state.mode == .voice {
             dictation.prepare()
         }
 
@@ -93,12 +98,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         fnMonitor.onToggle = { [weak self] in
             guard let self else { return }
             if self.state.isOpen {
-                if self.mode == .voice { self.dictation.cancelRecording() }
+                if self.state.mode == .voice { self.dictation.cancelRecording() }
                 self.hide()
             } else {
                 self.state.startTurn()
                 self.show()
-                if self.mode == .voice { self.dictation.startRecording() }
+                if self.state.mode == .voice { self.dictation.startRecording() }
             }
         }
         // Voice only: Enter alternates listen ⇄ submit while the pill is visible —
@@ -106,7 +111,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // it starts a fresh turn. (In text mode the panel is key, so Enter is
         // handled by the focused field via `onSubmitText`, not this global tap.)
         fnMonitor.onSubmit = { [weak self] in
-            guard let self, self.mode == .voice, self.state.isOpen else { return }
+            guard let self, self.state.mode == .voice, self.state.isOpen else { return }
             switch self.state.phase {
             case .listening:
                 self.state.beginThinking()
@@ -118,22 +123,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 break
             }
         }
+        // Tab flips text ⇄ voice while the pill is open (handled by FnKeyMonitor's
+        // local monitor, so it only fires when Isle itself has focus).
+        fnMonitor.onSwitchMode = { [weak self] in self?.switchMode() }
         fnMonitor.start()
+    }
+
+    /// Toggle the input mode while the pill is open, remembering the choice. The
+    /// conversation (history + on-screen answer) is kept; the in-progress compose
+    /// is reset and the new mode's composer takes over — voice starts recording,
+    /// text grabs the field (via `FragmentView.syncFocus`). Ignored mid-thought.
+    private func switchMode() {
+        guard state.isOpen, state.phase != .thinking else { return }
+        if state.mode == .voice { dictation.cancelRecording() }
+
+        let next: InputMode = state.mode == .text ? .voice : .text
+        state.mode = next
+        UserDefaults.standard.set(next.rawValue, forKey: Self.modeKey)
+
+        state.startTurn()
+        if next == .voice {
+            dictation.prepare()        // lazy first load; no-op once loaded
+            dictation.startRecording()
+        }
     }
 
     private func show() {
         guard let panel else { return }
         cancelIdleTimer()
         positionBelowNotch(panel)
-        if mode == .text {
-            // Text mode needs the field to receive keystrokes. The panel is a
-            // non-activating panel, so it becomes key (caret + typing) without
-            // activating Isle or visually defocusing the frontmost app.
-            panel.makeKeyAndOrderFront(nil)
-        } else {
-            // orderFrontRegardless avoids stealing focus from the foreground app.
-            panel.orderFrontRegardless()
-        }
+        // The panel becomes key in both modes so it receives keystrokes — text
+        // needs the field's caret, and voice needs Tab/Enter to reach the local
+        // monitor. As a non-activating panel it does this without activating Isle
+        // or visually defocusing the frontmost app.
+        panel.makeKeyAndOrderFront(nil)
         state.isOpen = true
     }
 

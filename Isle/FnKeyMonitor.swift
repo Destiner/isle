@@ -22,10 +22,13 @@ final class FnKeyMonitor {
     var onToggle: (() -> Void)?
     /// Fired when Enter / Return is pressed (submit the current dictation).
     var onSubmit: (() -> Void)?
+    /// Fired when Tab is pressed while Isle holds focus (switch input mode).
+    var onSwitchMode: (() -> Void)?
 
     private var globalMonitor: Any?
     private var localMonitor: Any?
     private var keyDownMonitor: Any?
+    private var localKeyDownMonitor: Any?
     private var isDown = false
 
     func start() {
@@ -48,15 +51,33 @@ final class FnKeyMonitor {
             return event
         }
 
-        // Enter (submit), globally. Passive monitor — it observes without
-        // swallowing the event, so it won't interfere with the frontmost app.
-        // AppDelegate ignores Enter unless Isle is visible.
+        // Enter (submit) while another app is frontmost — e.g. a voice turn where
+        // the user clicked away. Passive global monitor; AppDelegate ignores Enter
+        // unless Isle is visible. (When Isle holds focus the event is ours, so the
+        // global monitor stays silent and the local monitor below handles it.)
         keyDownMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
             switch event.keyCode {
             case UInt16(kVK_Return), UInt16(kVK_ANSI_KeypadEnter):
                 self?.onSubmit?()
             default:
                 break
+            }
+        }
+
+        // Keys aimed at Isle while it holds focus (the pill is open). Tab switches
+        // mode and is swallowed so the text field doesn't beep / traverse; Enter
+        // drives the voice submit path (in text mode it's a no-op here and the
+        // event passes through to the field's own onSubmit).
+        localKeyDownMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            switch event.keyCode {
+            case UInt16(kVK_Tab):
+                self?.onSwitchMode?()
+                return nil
+            case UInt16(kVK_Return), UInt16(kVK_ANSI_KeypadEnter):
+                self?.onSubmit?()
+                return event
+            default:
+                return event
             }
         }
     }

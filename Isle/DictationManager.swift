@@ -17,6 +17,7 @@ final class DictationManager {
     private let codex = CodexClient()
     private var asr: AsrManager?
     private var isTranscribing = false
+    private var prepared = false
 
     /// The running conversation, passed back to Codex on each turn so it has the
     /// full context. Cleared by `clearHistory()` (Esc).
@@ -44,8 +45,12 @@ final class DictationManager {
     private var partialInFlight = false
 
     /// Requests mic access and loads (downloading on first run) the English
-    /// Parakeet v2 model. Safe to call once at launch; runs in the background.
+    /// Parakeet v2 model. Idempotent — safe to call at launch and again on the
+    /// first Tab switch into voice. Runs in the background.
     func prepare() {
+        guard !prepared else { return }
+        prepared = true
+
         // Request mic access independently so it never blocks the model download.
         Task { await requestMicAccess() }
 

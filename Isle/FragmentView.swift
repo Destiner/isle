@@ -65,6 +65,8 @@ final class IslandState: ObservableObject {
     @Published private(set) var assistantTurns: [AssistantTurn] = []
     /// The message being typed in text mode (bound to the input field).
     @Published var draft: String = ""
+    /// Active input mode; flipped live by Tab (see AppDelegate.switchMode).
+    @Published var mode: InputMode = .text
 
     /// Wrap width (pill width minus padding); set by the view once laid out.
     var availableTextWidth: CGFloat = 344
@@ -228,7 +230,6 @@ final class IslandState: ObservableObject {
 /// so the emerge animation can travel upward without being clipped.
 struct FragmentView: View {
     @ObservedObject var state: IslandState
-    var mode: InputMode
     var pillSize: CGSize
     var topRoom: CGFloat
     /// Width the transcript wraps at once text starts arriving.
@@ -251,7 +252,7 @@ struct FragmentView: View {
     /// Codex isn't mid-thought — so the next question can be typed right after an
     /// answer without any extra gesture.
     private var showsInput: Bool {
-        mode == .text && state.phase != .thinking
+        state.mode == .text && state.phase != .thinking
     }
 
     /// While responding, show the active answer. Otherwise show the previous
@@ -285,12 +286,14 @@ struct FragmentView: View {
             // just start typing the moment the pill opens (or after an answer).
             .onChange(of: state.isOpen) { _, _ in syncFocus() }
             .onChange(of: state.phase) { _, _ in syncFocus() }
+            // A Tab switch can land on text mode without changing phase, so react
+            // to the mode flip too — grab the caret for text, drop it for voice.
+            .onChange(of: state.mode) { _, _ in syncFocus() }
             .contextMenu { Button("Quit Isle", action: onQuit) }
     }
 
     private func syncFocus() {
-        guard mode == .text else { return }
-        inputFocused = state.isOpen && showsInput
+        inputFocused = state.mode == .text && state.isOpen && showsInput
     }
 
     /// The capsule itself: a compact status pill that grows into a rounded card
@@ -299,7 +302,7 @@ struct FragmentView: View {
         // Center-aligned so the status indicator stays centered as the pill
         // widens; the transcript/answers keep their own full-width leading frame.
         VStack(alignment: .center, spacing: 10) {
-            StatusIndicator(phase: state.phase, mode: mode, active: state.isOpen)
+            StatusIndicator(phase: state.phase, mode: state.mode, active: state.isOpen)
 
             ForEach(visibleTurns) { turn in
                 ResponseBubble(text: turn.text, active: turn.id == state.activeTurnID)
@@ -647,7 +650,6 @@ private struct StatusIndicator: View {
         """)
     return FragmentView(
         state: state,
-        mode: .text,
         pillSize: CGSize(width: 150, height: 40),
         topRoom: 30,
         expandedWidth: 360,
