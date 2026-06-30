@@ -7,7 +7,7 @@ import AppKit
 import AVFoundation
 import FluidAudio
 
-/// Records speech while the fn key is held and, on release, transcribes it
+/// Records speech while Isle is visible and, on Enter, transcribes it
 /// locally with Parakeet (via FluidAudio / CoreML), then sends the transcript to
 /// Codex and reports back its answer. The model is downloaded once on first
 /// launch and cached.
@@ -110,6 +110,15 @@ final class DictationManager {
                 onNoResponse?("Couldn't transcribe that.")
             }
         }
+    }
+
+    /// Stops recording and discards the clip without transcribing or sending —
+    /// used when the user toggles Isle off mid-listen. Safe to call when not
+    /// recording. The conversation history is left intact.
+    func cancelRecording() {
+        partialTask?.cancel()
+        partialTask = nil
+        _ = recorder.stop()
     }
 
     /// Forgets the conversation so the next request starts a fresh context.

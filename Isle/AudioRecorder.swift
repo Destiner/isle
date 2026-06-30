@@ -6,7 +6,7 @@
 import AVFoundation
 
 /// Captures microphone audio and resamples it to 16 kHz mono Float — the format
-/// FluidAudio's Parakeet model expects. Recording runs while the fn key is held.
+/// FluidAudio's Parakeet model expects. Recording runs while the pill is visible.
 final class AudioRecorder {
 
     /// Thread-safe sample sink: the audio tap runs off the main thread.

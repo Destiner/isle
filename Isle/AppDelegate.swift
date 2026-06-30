@@ -54,7 +54,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         dictation.onFinalTranscript = { [weak self] text in
             self?.state.setFinalTranscript(text)
         }
-        // Codex answered → show it in the pill (stays open until the next hold).
+        // Codex answered → show it in the pill (stays open until the next fn-tap).
         dictation.onResponse = { [weak self] answer in
             self?.state.showResponse(answer)
         }
@@ -69,18 +69,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        // Hold fn / 🌐 to dictate a request; release to send it to Codex and
-        // show the answer. The conversation persists across holds; a short tap
-        // with no speech keeps the previous answer.
-        fnMonitor.onChange = { [weak self] pressed in
+        // Tap fn / 🌐 to toggle Isle: opening starts recording right away — speak
+        // freely while the pill is visible. Tapping again hides it (the
+        // conversation persists for the next open).
+        fnMonitor.onToggle = { [weak self] in
             guard let self else { return }
-            if pressed {
+            if self.state.isOpen {
+                self.dictation.cancelRecording()
+                self.hide()
+            } else {
                 self.state.startTurn()
                 self.show()
                 self.dictation.startRecording()
-            } else {
+            }
+        }
+        // Enter alternates listen ⇄ submit while the pill is visible: from
+        // listening it sends the speech so far to Codex; from a shown answer it
+        // starts a fresh turn (the previous answer collapses to context). A tap
+        // while Codex is still thinking is ignored.
+        fnMonitor.onSubmit = { [weak self] in
+            guard let self, self.state.isOpen else { return }
+            switch self.state.phase {
+            case .listening:
                 self.state.beginThinking()
                 self.dictation.finishAndRespond()
+            case .responding:
+                self.state.startTurn()
+                self.dictation.startRecording()
+            case .thinking:
+                break
             }
         }
         // Esc clears the conversation and dismisses the pill.

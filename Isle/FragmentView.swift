@@ -36,7 +36,7 @@ enum TranscriptMetrics {
     static let spaceWidth: CGFloat = width(" ")
 }
 
-/// The stage of a single fn-held interaction: capturing speech, waiting on
+/// The stage of a single interaction: capturing speech, waiting on
 /// Codex, or showing its answer.
 enum IslandPhase {
     case listening
