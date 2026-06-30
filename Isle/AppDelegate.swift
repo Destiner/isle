@@ -81,6 +81,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         dictation.onResponse = { [weak self] answer in
             self?.state.showResponse(answer)
         }
+        // Voice only: the speaker fell quiet after talking — auto-submit, exactly
+        // as if Enter had been pressed from listening. Manual Enter still works as
+        // an instant override (`onSubmit`).
+        dictation.onEndpoint = { [weak self] in
+            guard let self, self.state.mode == .voice, self.state.isOpen,
+                  self.state.phase == .listening else { return }
+            self.state.beginThinking()
+            self.dictation.finishAndRespond()
+        }
         // Nothing captured, or the request failed: show the error, otherwise fall
         // back to the previous answer (or collapse if there's nothing to show).
         dictation.onNoResponse = { [weak self] error in
@@ -107,9 +116,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
         // Voice only: Enter alternates listen ⇄ submit while the pill is visible —
-        // from listening it sends the speech so far to Codex; from a shown answer
-        // it starts a fresh turn. (In text mode the panel is key, so Enter is
-        // handled by the focused field via `onSubmitText`, not this global tap.)
+        // from listening it sends the speech so far to Codex (an instant override
+        // for the automatic silence endpoint); from a shown answer it starts a
+        // fresh turn. (In text mode the panel is key, so Enter is handled by the
+        // focused field via `onSubmitText`, not this global tap.)
         fnMonitor.onSubmit = { [weak self] in
             guard let self, self.state.mode == .voice, self.state.isOpen else { return }
             switch self.state.phase {

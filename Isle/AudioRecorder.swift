@@ -28,6 +28,18 @@ final class AudioRecorder {
             lock.lock(); defer { lock.unlock() }
             return samples
         }
+
+        /// RMS energy over the trailing `n` samples, without copying the buffer.
+        /// Returns 0 when empty. Used for cheap silence-based endpointing.
+        func trailingRMS(sampleCount n: Int) -> Float {
+            lock.lock(); defer { lock.unlock() }
+            let count = samples.count
+            guard count > 0 else { return 0 }
+            let start = max(0, count - n)
+            var sum: Float = 0
+            for i in start..<count { sum += samples[i] * samples[i] }
+            return (sum / Float(count - start)).squareRoot()
+        }
     }
 
     private let engine = AVAudioEngine()
@@ -73,6 +85,12 @@ final class AudioRecorder {
     /// The audio captured so far, without stopping or clearing the buffer.
     /// Used for live partial transcription while recording is ongoing.
     func snapshot() -> [Float] { box.snapshot() }
+
+    /// RMS energy of the trailing `seconds` of captured audio, leaving the
+    /// buffer intact. Used for silence-based endpointing while recording.
+    func trailingRMS(seconds: Double) -> Float {
+        box.trailingRMS(sampleCount: Int(seconds * targetFormat.sampleRate))
+    }
 
     /// Stops recording and returns the captured 16 kHz mono samples.
     func stop() -> [Float] {

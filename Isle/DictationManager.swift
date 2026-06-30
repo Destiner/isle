@@ -37,12 +37,27 @@ final class DictationManager {
     /// The string is nil for an empty capture and an error message otherwise.
     var onNoResponse: ((String?) -> Void)?
 
+    /// Fired when the speaker has gone quiet after talking — the cue to submit
+    /// the clip automatically. Wired to the same path as Enter from listening.
+    var onEndpoint: (() -> Void)?
+
     /// How often the accumulating buffer is re-transcribed for a live preview.
     private let partialInterval: Duration = .milliseconds(350)
     /// Parakeet rejects clips shorter than 0.3 s; require a touch more.
     private let minPartialSamples = 16_000 * 4 / 10  // 0.4 s at 16 kHz
     private var partialTask: Task<Void, Never>?
     private var partialInFlight = false
+
+    // Silence-based endpointing. A cheap RMS gate ticks on its own cadence
+    // (decoupled from transcription latency) and fires `onEndpoint` once the
+    // speaker has talked for at least `minSpeech` and then fallen quiet for
+    // `endpointSilence`. Thresholds are heuristic and hardware-dependent.
+    private let endpointInterval: Duration = .milliseconds(150)
+    private let endpointWindow: Double = 0.6      // trailing seconds measured for RMS
+    private let silenceThreshold: Float = 0.008   // below this the window is "quiet"
+    private let minSpeech: Double = 0.4           // speech needed before silence can end the turn
+    private let endpointSilence: Double = 1.5     // sustained quiet that triggers submit
+    private var endpointTask: Task<Void, Never>?
 
     /// Requests mic access and loads (downloading on first run) the English
     /// Parakeet v2 model. Idempotent — safe to call at launch and again on the
@@ -78,6 +93,7 @@ final class DictationManager {
         }
         onPartialTranscript?("")
         startPartialLoop()
+        startEndpointLoop()
     }
 
     /// Stops recording, transcribes the clip, and sends the transcript to Codex,
@@ -85,6 +101,8 @@ final class DictationManager {
     func finishAndRespond() {
         partialTask?.cancel()
         partialTask = nil
+        endpointTask?.cancel()
+        endpointTask = nil
 
         let samples = recorder.stop()
         guard let asr, !samples.isEmpty else {
@@ -151,6 +169,8 @@ final class DictationManager {
     func cancelRecording() {
         partialTask?.cancel()
         partialTask = nil
+        endpointTask?.cancel()
+        endpointTask = nil
         _ = recorder.stop()
     }
 
@@ -170,6 +190,38 @@ final class DictationManager {
                 try? await Task.sleep(for: self?.partialInterval ?? .milliseconds(350))
                 if Task.isCancelled { return }
                 await self?.emitPartialTranscript()
+            }
+        }
+    }
+
+    /// Ticks a cheap RMS silence gate on a fixed cadence while recording. Once
+    /// the speaker has talked for `minSpeech` and then stayed quiet for
+    /// `endpointSilence`, fires `onEndpoint` (the auto-submit cue) and stops.
+    /// Kept separate from the partial loop so transcription latency never skews
+    /// the silence timing.
+    private func startEndpointLoop() {
+        endpointTask?.cancel()
+        let tick = Double(endpointInterval.components.seconds)
+            + Double(endpointInterval.components.attoseconds) / 1e18
+        endpointTask = Task { [weak self] in
+            var speech = 0.0
+            var silence = 0.0
+            while !Task.isCancelled {
+                try? await Task.sleep(for: self?.endpointInterval ?? .milliseconds(150))
+                guard let self, !Task.isCancelled, self.recorder.isRecording else { return }
+
+                let rms = self.recorder.trailingRMS(seconds: self.endpointWindow)
+                if rms >= self.silenceThreshold {
+                    speech += tick
+                    silence = 0
+                } else if speech >= self.minSpeech {
+                    silence += tick
+                    if silence >= self.endpointSilence {
+                        self.endpointTask = nil
+                        self.onEndpoint?()
+                        return
+                    }
+                }
             }
         }
     }
