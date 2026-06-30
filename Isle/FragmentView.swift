@@ -36,12 +36,33 @@ enum TranscriptMetrics {
     static let spaceWidth: CGFloat = width(" ")
 }
 
-/// Drives the open/close animation and holds the live transcript.
+/// The stage of a single fn-held interaction: capturing speech, waiting on
+/// Codex, or showing its answer.
+enum IslandPhase {
+    case listening
+    case thinking
+    case responding
+}
+
+/// One answer from Codex, kept as an identified turn so SwiftUI preserves the
+/// view across phases — the same bubble morphs from the active (white, full)
+/// answer into a collapsed, greyed context line when the next turn begins.
+struct AssistantTurn: Identifiable {
+    let id: Int
+    let text: String
+}
+
+/// Drives the open/close animation and holds the live transcript + answers.
 /// Toggled by the fn key in AppDelegate.
 final class IslandState: ObservableObject {
     @Published var isOpen = false
     /// Recognized speech as positioned words, each stamped with its last change.
     @Published private(set) var words: [TranscriptWord] = []
+    /// Where we are in the listen → think → answer cycle.
+    @Published private(set) var phase: IslandPhase = .listening
+    /// Every answer this conversation; the last is the active one while
+    /// `phase == .responding`, earlier ones render as collapsed grey context.
+    @Published private(set) var assistantTurns: [AssistantTurn] = []
 
     /// Wrap width (pill width minus padding); set by the view once laid out.
     var availableTextWidth: CGFloat = 344
@@ -50,8 +71,65 @@ final class IslandState: ObservableObject {
     private var pending: [TranscriptWord] = []
     private var currentLineWidth: CGFloat = 0
     private var staging = false
+    private var turnCounter = 0
 
     var hasTranscript: Bool { !words.isEmpty }
+    var hasHistory: Bool { !assistantTurns.isEmpty }
+    /// The answer currently presented as active (white, full); nil unless responding.
+    var activeTurnID: Int? { phase == .responding ? assistantTurns.last?.id : nil }
+
+    /// Full clear (Esc / fresh start): drops the transcript and all answers.
+    func reset() {
+        clearTranscript()
+        assistantTurns = []
+        phase = .listening
+    }
+
+    /// Begins a new user turn while keeping the conversation: the previous
+    /// answer stays on screen and, once `phase` leaves `.responding`, collapses
+    /// to a greyed context line as we start listening for the next request.
+    func startTurn() {
+        clearTranscript()
+        phase = .listening
+    }
+
+    /// Speech capture is done; we're now waiting on Codex.
+    func beginThinking() {
+        phase = .thinking
+    }
+
+    /// Codex answered: append it as the active turn (white, full).
+    func showResponse(_ text: String) {
+        turnCounter += 1
+        assistantTurns.append(AssistantTurn(id: turnCounter, text: text))
+        clearTranscript()
+        phase = .responding
+    }
+
+    /// An empty/failed capture: fall back to the previous answer if there is one
+    /// (so a stray tap doesn't lose context). Returns false when there's nothing
+    /// to fall back to, so the caller can hide the pill instead.
+    @discardableResult
+    func cancelTurn() -> Bool {
+        clearTranscript()
+        guard hasHistory else { return false }
+        phase = .responding
+        return true
+    }
+
+    /// Recording stopped: append any not-yet-revealed words and show the whole
+    /// message at once — no point pacing the reveal once capture is over.
+    func setFinalTranscript(_ text: String) {
+        update(transcript: text)
+        let now = Date()
+        while !pending.isEmpty {
+            var word = pending.removeFirst()
+            word.changedAt = now
+            words.append(word)
+        }
+        currentLineWidth = 0
+        staging = false
+    }
 
     func clearTranscript() {
         words = []
@@ -147,7 +225,26 @@ struct FragmentView: View {
     var onQuit: () -> Void
 
     private let textPadding: CGFloat = 18
-    private var hasText: Bool { state.hasTranscript }
+
+    /// The user's live/just-finished message shows while listening or thinking;
+    /// once Codex answers it's dropped in favor of the response.
+    private var showsUserMessage: Bool {
+        state.hasTranscript && state.phase != .responding
+    }
+
+    /// While responding, show the active answer. Otherwise show the previous
+    /// answer as collapsed grey context — but only until the new message starts
+    /// arriving, at which point it animates away.
+    private var visibleTurns: [AssistantTurn] {
+        if state.phase != .responding && state.hasTranscript { return [] }
+        return Array(state.assistantTurns.suffix(1))
+    }
+
+    /// The pill grows into a card whenever there's content to show — a live
+    /// transcript or any answer.
+    private var expanded: Bool {
+        showsUserMessage || !visibleTurns.isEmpty
+    }
 
     var body: some View {
         pill
@@ -159,19 +256,28 @@ struct FragmentView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .animation(.spring(response: 0.34, dampingFraction: 0.7), value: state.isOpen)
             .animation(.spring(response: 0.38, dampingFraction: 0.82), value: state.words.count)
+            .animation(.spring(response: 0.4, dampingFraction: 0.85), value: state.phase)
+            .animation(.spring(response: 0.4, dampingFraction: 0.85), value: state.assistantTurns.count)
             .onAppear { state.availableTextWidth = expandedWidth - 2 * textPadding }
             .contextMenu { Button("Quit Isle", action: onQuit) }
     }
 
-    /// The capsule itself: a compact "Listening" pill that grows into a rounded
-    /// card as recognized text streams in.
+    /// The capsule itself: a compact status pill that grows into a rounded card
+    /// as recognized text streams in and as Codex's answers arrive.
     private var pill: some View {
-        // Center-aligned so the "Listening" indicator stays centered as the pill
-        // widens; the transcript keeps its own full-width leading frame below.
+        // Center-aligned so the status indicator stays centered as the pill
+        // widens; the transcript/answers keep their own full-width leading frame.
         VStack(alignment: .center, spacing: 10) {
-            ListeningIndicator(active: state.isOpen)
+            StatusIndicator(phase: state.phase, active: state.isOpen)
 
-            if hasText {
+            ForEach(visibleTurns) { turn in
+                ResponseBubble(text: turn.text, active: turn.id == state.activeTurnID)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    // Fade + collapse upward when the new user message displaces it.
+                    .transition(.opacity.combined(with: .scale(scale: 0.92, anchor: .top)))
+            }
+
+            if showsUserMessage {
                 TranscriptText(
                     words: state.words,
                     availableWidth: expandedWidth - 2 * textPadding
@@ -181,10 +287,54 @@ struct FragmentView: View {
             }
         }
         .padding(.horizontal, textPadding)
-        .padding(.vertical, hasText ? 16 : 0)
+        .padding(.vertical, expanded ? 16 : 0)
         .frame(minWidth: pillSize.width, minHeight: pillSize.height)
-        .frame(maxWidth: hasText ? expandedWidth : nil, alignment: .leading)
+        .frame(maxWidth: expanded ? expandedWidth : nil, alignment: .leading)
         .background(.black, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+    }
+}
+
+/// One Codex answer. As the active turn it's full and white (scrolling past a
+/// height cap); once a newer turn takes over it collapses to two greyed lines of
+/// context. Both states share this view so the change animates as a collapse.
+private struct ResponseBubble: View {
+    var text: String
+    var active: Bool
+
+    @State private var contentHeight: CGFloat = 0
+    private let maxHeight: CGFloat = 340
+
+    private struct HeightKey: PreferenceKey {
+        static var defaultValue: CGFloat = 0
+        static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+            value = max(value, nextValue())
+        }
+    }
+
+    var body: some View {
+        ScrollView {
+            Text(text)
+                .font(.system(size: 14, weight: .regular, design: .rounded))
+                .foregroundStyle(.white.opacity(active ? 1 : 0.4))
+                .lineLimit(active ? nil : 2)
+                .truncationMode(.tail)
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(GeometryReader { geo in
+                    Color.clear.preference(key: HeightKey.self, value: geo.size.height)
+                })
+        }
+        .scrollDisabled(!active)
+        .frame(height: min(contentHeight, maxHeight))
+        // Animate the measured height too: when `active` flips, the text reflows
+        // to a new height a render later, so without this the height would jump
+        // while only the color tweened.
+        .onPreferenceChange(HeightKey.self) { newHeight in
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+                contentHeight = newHeight
+            }
+        }
+        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: active)
     }
 }
 
@@ -314,15 +464,36 @@ private struct TranscriptText: View {
     }
 }
 
-/// A pulsing teal dot + "Listening" label, conveying live mic capture.
-/// The dot gently breathes while a soft ring pings outward — subtle, not blinky.
-private struct ListeningIndicator: View {
-    /// Only animates while the island is open (i.e. actually recording).
+/// A pulsing dot + label conveying the current phase: teal "Listening" while
+/// capturing speech, amber "Thinking" while waiting on Codex. The dot gently
+/// breathes while a soft ring pings outward — subtle, not blinky.
+private struct StatusIndicator: View {
+    var phase: IslandPhase
+    /// Only animates while the island is open.
     var active: Bool
 
-    private let tint = Color(red: 0.20, green: 0.80, blue: 0.80)
-
     @State private var ping = false
+
+    private var tint: Color {
+        switch phase {
+        case .listening: Color(red: 0.20, green: 0.80, blue: 0.80)  // teal
+        case .thinking: Color(red: 0.95, green: 0.72, blue: 0.30)   // amber
+        case .responding: Color(red: 0.30, green: 0.82, blue: 0.46) // green
+        }
+    }
+
+    private var label: String {
+        switch phase {
+        case .listening: "Listening"
+        case .thinking: "Thinking"
+        case .responding: "Ready"
+        }
+    }
+
+    /// The dot only pulses while actively listening or thinking.
+    private var shouldPulse: Bool {
+        active && phase != .responding
+    }
 
     var body: some View {
         HStack(spacing: 11) {
@@ -341,12 +512,13 @@ private struct ListeningIndicator: View {
             .frame(width: 9, height: 9)
             .shadow(color: tint.opacity(0.7), radius: 5)
 
-            Text("Listening")
+            Text(label)
                 .font(.system(size: 13, weight: .medium, design: .rounded))
                 .foregroundStyle(.white.opacity(0.92))
         }
-        .onChange(of: active, initial: true) { _, isActive in
-            if isActive {
+        .animation(.easeInOut(duration: 0.25), value: phase)
+        .onChange(of: shouldPulse, initial: true) { _, pulsing in
+            if pulsing {
                 withAnimation(.easeOut(duration: 1.5).repeatForever(autoreverses: false)) {
                     ping = true
                 }

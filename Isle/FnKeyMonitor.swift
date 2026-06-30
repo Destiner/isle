@@ -7,23 +7,29 @@ import AppKit
 import ApplicationServices
 import Carbon.HIToolbox
 
-/// Watches the physical fn / 🌐 (Globe) key system-wide and reports press/release.
+/// Watches the physical fn / 🌐 (Globe) key system-wide and reports press/release,
+/// plus a global Escape press for dismissal.
 ///
 /// fn is a hardware modifier, not a regular key, so it can't be a Carbon hotkey.
 /// Instead we observe `.flagsChanged` events and key off `kVK_Function` (keyCode 63).
 ///
-/// Global keyboard monitoring requires Accessibility permission, so the App
-/// Sandbox is disabled for this target.
+/// Permissions: `.flagsChanged` monitoring (fn) needs **Accessibility**, but
+/// global `.keyDown` monitoring (Esc) is gated separately behind **Input
+/// Monitoring** — without it the Esc monitor installs silently but never fires.
+/// We request both. (Global monitoring also requires the App Sandbox off.)
 final class FnKeyMonitor {
     /// `true` on press, `false` on release.
     var onChange: ((Bool) -> Void)?
+    /// Fired when the Escape key is pressed (used to dismiss Isle).
+    var onEscape: (() -> Void)?
 
     private var globalMonitor: Any?
     private var localMonitor: Any?
+    private var keyDownMonitor: Any?
     private var isDown = false
 
     func start() {
-        requestAccessibilityIfNeeded()
+        requestPermissions()
 
         let handle: (NSEvent) -> Void = { [weak self] event in
             guard let self, event.keyCode == UInt16(kVK_Function) else { return }
@@ -40,11 +46,24 @@ final class FnKeyMonitor {
             handle(event)
             return event
         }
+
+        // Escape, globally, to dismiss. Passive monitor — it observes without
+        // swallowing the event, so it won't interfere with the frontmost app.
+        keyDownMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard event.keyCode == UInt16(kVK_Escape) else { return }
+            self?.onEscape?()
+        }
     }
 
-    private func requestAccessibilityIfNeeded() {
+    private func requestPermissions() {
+        // Accessibility — required for the fn (`.flagsChanged`) monitor.
         let key = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
-        let options = [key: true] as CFDictionary
-        AXIsProcessTrustedWithOptions(options)
+        AXIsProcessTrustedWithOptions([key: true] as CFDictionary)
+
+        // Input Monitoring — required for the global Esc (`.keyDown`) monitor;
+        // not covered by Accessibility. Prompts once; the grant needs a relaunch.
+        if !CGPreflightListenEventAccess() {
+            CGRequestListenEventAccess()
+        }
     }
 }

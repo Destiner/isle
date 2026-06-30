@@ -5,20 +5,36 @@
 
 import AppKit
 import AVFoundation
-import Carbon.HIToolbox
 import FluidAudio
 
 /// Records speech while the fn key is held and, on release, transcribes it
-/// locally with Parakeet (via FluidAudio / CoreML) and pastes the text into the
-/// active app. The model is downloaded once on first launch and cached.
+/// locally with Parakeet (via FluidAudio / CoreML), then sends the transcript to
+/// Codex and reports back its answer. The model is downloaded once on first
+/// launch and cached.
 @MainActor
 final class DictationManager {
     private let recorder = AudioRecorder()
+    private let codex = CodexClient()
     private var asr: AsrManager?
     private var isTranscribing = false
 
+    /// The running conversation, passed back to Codex on each turn so it has the
+    /// full context. Cleared by `clearHistory()` (Esc).
+    private var history: [CodexClient.Turn] = []
+
     /// Live partial transcript updates while recording, on the main actor.
     var onPartialTranscript: ((String) -> Void)?
+
+    /// Fired with the final transcript once recording stops, just before the
+    /// request is sent to Codex (so the UI can settle the question).
+    var onFinalTranscript: ((String) -> Void)?
+
+    /// Fired with Codex's answer once it arrives.
+    var onResponse: ((String) -> Void)?
+
+    /// Fired when nothing usable was captured, or the Codex request failed.
+    /// The string is nil for an empty capture and an error message otherwise.
+    var onNoResponse: ((String?) -> Void)?
 
     /// How often the accumulating buffer is re-transcribed for a live preview.
     private let partialInterval: Duration = .milliseconds(350)
@@ -59,25 +75,46 @@ final class DictationManager {
         startPartialLoop()
     }
 
-    /// Stops recording, transcribes, and pastes the result into the active app.
-    func finishAndPaste() {
+    /// Stops recording, transcribes the clip, and sends the transcript to Codex,
+    /// reporting the answer (or a failure) through the callbacks.
+    func finishAndRespond() {
         partialTask?.cancel()
         partialTask = nil
 
         let samples = recorder.stop()
-        guard let asr, !samples.isEmpty else { return }
+        guard let asr, !samples.isEmpty else {
+            onNoResponse?(nil)
+            return
+        }
 
         Task {
             do {
                 var state = TdtDecoderState.make(decoderLayers: await asr.decoderLayerCount)
                 let result = try await asr.transcribe(samples, decoderState: &state)
-                let text = result.text.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !text.isEmpty else { return }
-                paste(text)
+                let prompt = result.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !prompt.isEmpty else {
+                    onNoResponse?(nil)
+                    return
+                }
+                onFinalTranscript?(prompt)
+
+                let answer = try await codex.send(prompt, history: history)
+                history.append(CodexClient.Turn(role: .user, text: prompt))
+                history.append(CodexClient.Turn(role: .assistant, text: answer))
+                onResponse?(answer)
+            } catch let error as CodexClient.CodexError {
+                NSLog("Isle: codex request failed: \(error)")
+                onNoResponse?(error.localizedDescription)
             } catch {
                 NSLog("Isle: transcription failed: \(error)")
+                onNoResponse?("Couldn't transcribe that.")
             }
         }
+    }
+
+    /// Forgets the conversation so the next request starts a fresh context.
+    func clearHistory() {
+        history.removeAll()
     }
 
     /// Periodically re-transcribes the whole accumulated buffer while recording,
@@ -109,32 +146,6 @@ final class DictationManager {
             onPartialTranscript?(result.text.trimmingCharacters(in: .whitespacesAndNewlines))
         } catch {
             // Transient (e.g. too-short clip mid-stream); the next tick retries.
-        }
-    }
-
-    /// Puts the text on the clipboard and sends ⌘V to the frontmost app, then
-    /// restores the previous clipboard contents.
-    private func paste(_ text: String) {
-        let pasteboard = NSPasteboard.general
-        let previous = pasteboard.string(forType: .string)
-        pasteboard.clearContents()
-        pasteboard.setString(text, forType: .string)
-
-        let source = CGEventSource(stateID: .combinedSessionState)
-        let vKey = CGKeyCode(kVK_ANSI_V)
-        let keyDown = CGEvent(keyboardEventSource: source, virtualKey: vKey, keyDown: true)
-        keyDown?.flags = .maskCommand
-        let keyUp = CGEvent(keyboardEventSource: source, virtualKey: vKey, keyDown: false)
-        keyUp?.flags = .maskCommand
-        keyDown?.post(tap: .cghidEventTap)
-        keyUp?.post(tap: .cghidEventTap)
-
-        // Restore the prior clipboard once the paste has been delivered.
-        if let previous {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                pasteboard.clearContents()
-                pasteboard.setString(previous, forType: .string)
-            }
         }
     }
 

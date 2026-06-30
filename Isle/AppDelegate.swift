@@ -50,17 +50,42 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         dictation.onPartialTranscript = { [weak self] text in
             self?.state.update(transcript: text)
         }
+        // On release: settle the full message before the answer arrives.
+        dictation.onFinalTranscript = { [weak self] text in
+            self?.state.setFinalTranscript(text)
+        }
+        // Codex answered → show it in the pill (stays open until the next hold).
+        dictation.onResponse = { [weak self] answer in
+            self?.state.showResponse(answer)
+        }
+        // Nothing captured, or the request failed: show the error, otherwise fall
+        // back to the previous answer (or collapse if there's nothing to show).
+        dictation.onNoResponse = { [weak self] error in
+            guard let self else { return }
+            if let error {
+                self.state.showResponse("⚠️ \(error)")
+            } else if !self.state.cancelTurn() {
+                self.hide()
+            }
+        }
 
-        // Hold fn / 🌐 to peek the fragment and dictate; release to hide and transcribe.
+        // Hold fn / 🌐 to dictate a request; release to send it to Codex and
+        // show the answer. The conversation persists across holds; a short tap
+        // with no speech keeps the previous answer.
         fnMonitor.onChange = { [weak self] pressed in
             guard let self else { return }
             if pressed {
+                self.state.startTurn()
                 self.show()
                 self.dictation.startRecording()
             } else {
-                self.hide()
-                self.dictation.finishAndPaste()
+                self.state.beginThinking()
+                self.dictation.finishAndRespond()
             }
+        }
+        // Esc clears the conversation and dismisses the pill.
+        fnMonitor.onEscape = { [weak self] in
+            self?.dismiss()
         }
         fnMonitor.start()
     }
@@ -73,14 +98,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         state.isOpen = true
     }
 
+    /// Clears the conversation and collapses the pill.
+    private func dismiss() {
+        guard state.isOpen else { return }
+        dictation.clearHistory()
+        hide()
+    }
+
     private func hide() {
         state.isOpen = false
         // Keep the panel on screen until the collapse animation finishes, then
-        // hide it and drop the transcript so it never flashes on the next open.
+        // hide it and reset so nothing flashes on the next open.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
             guard let self, !self.state.isOpen else { return }
             self.panel?.orderOut(nil)
-            self.state.clearTranscript()
+            self.state.reset()
         }
     }
 
