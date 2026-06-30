@@ -112,6 +112,34 @@ final class DictationManager {
         }
     }
 
+    /// Sends an already-composed message (text mode) straight to Codex, skipping
+    /// the mic and transcription. Reuses the same history and callbacks as the
+    /// voice path so the UI and conversation context stay identical.
+    func submitText(_ text: String) {
+        let prompt = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !prompt.isEmpty else {
+            onNoResponse?(nil)
+            return
+        }
+
+        Task {
+            do {
+                onFinalTranscript?(prompt)
+
+                let answer = try await codex.send(prompt, history: history)
+                history.append(CodexClient.Turn(role: .user, text: prompt))
+                history.append(CodexClient.Turn(role: .assistant, text: answer))
+                onResponse?(answer)
+            } catch let error as CodexClient.CodexError {
+                NSLog("Isle: codex request failed: \(error)")
+                onNoResponse?(error.localizedDescription)
+            } catch {
+                NSLog("Isle: codex request failed: \(error)")
+                onNoResponse?("Something went wrong.")
+            }
+        }
+    }
+
     /// Stops recording and discards the clip without transcribing or sending —
     /// used when the user toggles Isle off mid-listen. Safe to call when not
     /// recording. The conversation history is left intact.

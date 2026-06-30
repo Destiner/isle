@@ -6,11 +6,20 @@
 import AppKit
 import SwiftUI
 
+/// How the user composes a request. Text is the default; voice is kept wired but
+/// unused for now (flip this constant to bring it back).
+enum InputMode {
+    case voice
+    case text
+}
+
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var panel: FragmentPanel?
     private let fnMonitor = FnKeyMonitor()
     private let state = IslandState()
     private let dictation = DictationManager()
+
+    private let mode: InputMode = .text
 
     private let pillSize = CGSize(width: 150, height: 40)
     private let topRoom: CGFloat = 30     // headroom above the pill for the animation
@@ -34,17 +43,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let panel = FragmentPanel(
             rootView: FragmentView(
                 state: state,
+                mode: mode,
                 pillSize: pillSize,
                 topRoom: topRoom,
                 expandedWidth: expandedWidth,
+                onSubmitText: { [weak self] in self?.submitTypedText() },
                 onQuit: { NSApp.terminate(nil) }
             )
         )
         panel.setContentSize(panelSize)
+        panel.onDismiss = { [weak self] in self?.dismiss() }
         self.panel = panel
 
-        // Load (and download on first run) the transcription model.
-        dictation.prepare()
+        // Voice only: load (and download on first run) the transcription model.
+        if mode == .voice {
+            dictation.prepare()
+        }
 
         // Stream recognized speech into the pill as the user talks.
         dictation.onPartialTranscript = { [weak self] text in
@@ -75,20 +89,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         fnMonitor.onToggle = { [weak self] in
             guard let self else { return }
             if self.state.isOpen {
-                self.dictation.cancelRecording()
+                if self.mode == .voice { self.dictation.cancelRecording() }
                 self.hide()
             } else {
                 self.state.startTurn()
                 self.show()
-                self.dictation.startRecording()
+                if self.mode == .voice { self.dictation.startRecording() }
             }
         }
-        // Enter alternates listen ⇄ submit while the pill is visible: from
-        // listening it sends the speech so far to Codex; from a shown answer it
-        // starts a fresh turn (the previous answer collapses to context). A tap
-        // while Codex is still thinking is ignored.
+        // Voice only: Enter alternates listen ⇄ submit while the pill is visible —
+        // from listening it sends the speech so far to Codex; from a shown answer
+        // it starts a fresh turn. (In text mode the panel is key, so Enter is
+        // handled by the focused field via `onSubmitText`, not this global tap.)
         fnMonitor.onSubmit = { [weak self] in
-            guard let self, self.state.isOpen else { return }
+            guard let self, self.mode == .voice, self.state.isOpen else { return }
             switch self.state.phase {
             case .listening:
                 self.state.beginThinking()
@@ -110,9 +124,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func show() {
         guard let panel else { return }
         positionBelowNotch(panel)
-        // orderFrontRegardless avoids stealing focus from the foreground app.
-        panel.orderFrontRegardless()
+        if mode == .text {
+            // Text mode needs the field to receive keystrokes. The panel is a
+            // non-activating panel, so it becomes key (caret + typing) without
+            // activating Isle or visually defocusing the frontmost app.
+            panel.makeKeyAndOrderFront(nil)
+        } else {
+            // orderFrontRegardless avoids stealing focus from the foreground app.
+            panel.orderFrontRegardless()
+        }
         state.isOpen = true
+    }
+
+    /// Send the typed message to Codex. Ignored while Codex is thinking or when
+    /// the field is empty. Mirrors the voice submit path: stage the user message,
+    /// flip to thinking, then hand the text to the conversation.
+    private func submitTypedText() {
+        guard state.isOpen, state.phase != .thinking else { return }
+        let trimmed = state.draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        state.draft = ""
+        state.beginThinking()
+        dictation.submitText(trimmed)
     }
 
     /// Clears the conversation and collapses the pill.

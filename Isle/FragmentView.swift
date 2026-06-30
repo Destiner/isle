@@ -63,6 +63,8 @@ final class IslandState: ObservableObject {
     /// Every answer this conversation; the last is the active one while
     /// `phase == .responding`, earlier ones render as collapsed grey context.
     @Published private(set) var assistantTurns: [AssistantTurn] = []
+    /// The message being typed in text mode (bound to the input field).
+    @Published var draft: String = ""
 
     /// Wrap width (pill width minus padding); set by the view once laid out.
     var availableTextWidth: CGFloat = 344
@@ -82,6 +84,7 @@ final class IslandState: ObservableObject {
     func reset() {
         clearTranscript()
         assistantTurns = []
+        draft = ""
         phase = .listening
     }
 
@@ -90,6 +93,7 @@ final class IslandState: ObservableObject {
     /// to a greyed context line as we start listening for the next request.
     func startTurn() {
         clearTranscript()
+        draft = ""
         phase = .listening
     }
 
@@ -218,11 +222,16 @@ final class IslandState: ObservableObject {
 /// so the emerge animation can travel upward without being clipped.
 struct FragmentView: View {
     @ObservedObject var state: IslandState
+    var mode: InputMode
     var pillSize: CGSize
     var topRoom: CGFloat
     /// Width the transcript wraps at once text starts arriving.
     var expandedWidth: CGFloat
+    /// Called when the user presses Enter in the text field.
+    var onSubmitText: () -> Void
     var onQuit: () -> Void
+
+    @FocusState private var inputFocused: Bool
 
     private let textPadding: CGFloat = 18
 
@@ -230,6 +239,13 @@ struct FragmentView: View {
     /// once Codex answers it's dropped in favor of the response.
     private var showsUserMessage: Bool {
         state.hasTranscript && state.phase != .responding
+    }
+
+    /// In text mode the input field is present whenever the pill is open and
+    /// Codex isn't mid-thought — so the next question can be typed right after an
+    /// answer without any extra gesture.
+    private var showsInput: Bool {
+        mode == .text && state.phase != .thinking
     }
 
     /// While responding, show the active answer. Otherwise show the previous
@@ -243,7 +259,7 @@ struct FragmentView: View {
     /// The pill grows into a card whenever there's content to show — a live
     /// transcript or any answer.
     private var expanded: Bool {
-        showsUserMessage || !visibleTurns.isEmpty
+        showsUserMessage || !visibleTurns.isEmpty || showsInput
     }
 
     var body: some View {
@@ -259,7 +275,16 @@ struct FragmentView: View {
             .animation(.spring(response: 0.4, dampingFraction: 0.85), value: state.phase)
             .animation(.spring(response: 0.4, dampingFraction: 0.85), value: state.assistantTurns.count)
             .onAppear { state.availableTextWidth = expandedWidth - 2 * textPadding }
+            // Grab the caret whenever the input field is on screen so the user can
+            // just start typing the moment the pill opens (or after an answer).
+            .onChange(of: state.isOpen) { _, _ in syncFocus() }
+            .onChange(of: state.phase) { _, _ in syncFocus() }
             .contextMenu { Button("Quit Isle", action: onQuit) }
+    }
+
+    private func syncFocus() {
+        guard mode == .text else { return }
+        inputFocused = state.isOpen && showsInput
     }
 
     /// The capsule itself: a compact status pill that grows into a rounded card
@@ -268,7 +293,7 @@ struct FragmentView: View {
         // Center-aligned so the status indicator stays centered as the pill
         // widens; the transcript/answers keep their own full-width leading frame.
         VStack(alignment: .center, spacing: 10) {
-            StatusIndicator(phase: state.phase, active: state.isOpen)
+            StatusIndicator(phase: state.phase, mode: mode, active: state.isOpen)
 
             ForEach(visibleTurns) { turn in
                 ResponseBubble(text: turn.text, active: turn.id == state.activeTurnID)
@@ -285,12 +310,31 @@ struct FragmentView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .transition(.opacity)
             }
+
+            if showsInput {
+                inputField
+            }
         }
         .padding(.horizontal, textPadding)
         .padding(.vertical, expanded ? 16 : 0)
         .frame(minWidth: pillSize.width, minHeight: pillSize.height)
         .frame(maxWidth: expanded ? expandedWidth : nil, alignment: .leading)
         .background(.black, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+    }
+
+    /// The text-mode composer: a borderless field styled to match the transcript
+    /// so it blends into the pill. Enter sends; the caret is grabbed on open via
+    /// `syncFocus()`.
+    private var inputField: some View {
+        TextField("Ask anything…", text: $state.draft)
+            .textFieldStyle(.plain)
+            .font(.system(size: TranscriptMetrics.fontSize, weight: .regular, design: .rounded))
+            .foregroundStyle(.white)
+            .tint(.white)
+            .focused($inputFocused)
+            .onSubmit(onSubmitText)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .transition(.opacity)
     }
 }
 
@@ -505,6 +549,7 @@ private struct TranscriptText: View {
 /// breathes while a soft ring pings outward — subtle, not blinky.
 private struct StatusIndicator: View {
     var phase: IslandPhase
+    var mode: InputMode
     /// Only animates while the island is open.
     var active: Bool
 
@@ -520,15 +565,20 @@ private struct StatusIndicator: View {
 
     private var label: String {
         switch phase {
-        case .listening: "Listening"
+        case .listening: mode == .text ? "Ask" : "Listening"
         case .thinking: "Thinking"
         case .responding: "Ready"
         }
     }
 
-    /// The dot only pulses while actively listening or thinking.
+    /// In voice mode the dot pulses while listening or thinking. In text mode
+    /// there's no live capture, so the input phase ("Ask") stays steady and only
+    /// thinking pulses.
     private var shouldPulse: Bool {
-        active && phase != .responding
+        switch mode {
+        case .voice: active && phase != .responding
+        case .text: active && phase == .thinking
+        }
     }
 
     var body: some View {
@@ -584,9 +634,11 @@ private struct StatusIndicator: View {
         """)
     return FragmentView(
         state: state,
+        mode: .text,
         pillSize: CGSize(width: 150, height: 40),
         topRoom: 30,
         expandedWidth: 360,
+        onSubmitText: {},
         onQuit: {}
     )
     .frame(width: 420, height: 300)
