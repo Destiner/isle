@@ -304,6 +304,32 @@ private struct ResponseBubble: View {
     @State private var contentHeight: CGFloat = 0
     private let maxHeight: CGFloat = 340
 
+    /// Flatten markdown to readable plain text for the collapsed two-line context
+    /// line — drops fenced code blocks and strips the common inline/block markers
+    /// so leftover `**`/`#`/`` ` `` don't clutter the preview.
+    private static func plainPreview(_ markdown: String) -> String {
+        var keep: [String] = []
+        var inFence = false
+        for line in markdown.components(separatedBy: "\n") {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.hasPrefix("```") || trimmed.hasPrefix("~~~") { inFence.toggle(); continue }
+            if inFence { continue }
+            var stripped = trimmed
+            while let first = stripped.first, first == "#" || first == ">" {
+                stripped.removeFirst()
+            }
+            for marker in ["- ", "* ", "+ "] where stripped.hasPrefix(marker) {
+                stripped.removeFirst(marker.count)
+            }
+            stripped = stripped
+                .replacingOccurrences(of: "**", with: "")
+                .replacingOccurrences(of: "`", with: "")
+                .trimmingCharacters(in: .whitespaces)
+            if !stripped.isEmpty { keep.append(stripped) }
+        }
+        return keep.joined(separator: " ")
+    }
+
     private struct HeightKey: PreferenceKey {
         static var defaultValue: CGFloat = 0
         static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
@@ -313,16 +339,26 @@ private struct ResponseBubble: View {
 
     var body: some View {
         ScrollView {
-            Text(text)
-                .font(.system(size: 14, weight: .regular, design: .rounded))
-                .foregroundStyle(.white.opacity(active ? 1 : 0.4))
-                .lineLimit(active ? nil : 2)
-                .truncationMode(.tail)
-                .textSelection(.enabled)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(GeometryReader { geo in
-                    Color.clear.preference(key: HeightKey.self, value: geo.size.height)
-                })
+            Group {
+                if active {
+                    // Full answer: render Codex's markdown (bold, code, lists, …).
+                    MarkdownText(markdown: text)
+                } else {
+                    // Collapsed context: a flattened two-line preview, greyed out.
+                    // Markdown structure isn't useful at two lines, so we strip the
+                    // syntax to plain text rather than render it.
+                    Text(Self.plainPreview(text))
+                        .font(.system(size: 14, weight: .regular, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.4))
+                        .lineLimit(2)
+                        .truncationMode(.tail)
+                        .textSelection(.enabled)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(GeometryReader { geo in
+                Color.clear.preference(key: HeightKey.self, value: geo.size.height)
+            })
         }
         .scrollDisabled(!active)
         .frame(height: min(contentHeight, maxHeight))
@@ -532,7 +568,20 @@ private struct StatusIndicator: View {
 #Preview {
     let state = IslandState()
     state.isOpen = true
-    state.update(transcript: "this is the speech being recognized in real time as I talk")
+    state.showResponse("""
+        Here's a quick **summary** with a few `inline` bits:
+
+        - First point worth noting
+        - Second one, a bit longer so it wraps across the pill width
+
+        ```swift
+        func greet(_ name: String) {
+            print("Hello, \\(name)")
+        }
+        ```
+
+        That's the gist — see the [docs](https://example.com) for more.
+        """)
     return FragmentView(
         state: state,
         pillSize: CGSize(width: 150, height: 40),
