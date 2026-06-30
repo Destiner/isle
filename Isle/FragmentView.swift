@@ -77,8 +77,14 @@ final class IslandState: ObservableObject {
 
     var hasTranscript: Bool { !words.isEmpty }
     var hasHistory: Bool { !assistantTurns.isEmpty }
-    /// The answer currently presented as active (white, full); nil unless responding.
-    var activeTurnID: Int? { phase == .responding ? assistantTurns.last?.id : nil }
+    /// The answer currently presented as active (white, full); nil unless
+    /// responding. Once the user starts composing the next message (a non-empty
+    /// `draft`), it goes grey too — collapsing to the context line so the focus
+    /// shifts to what's being typed.
+    var activeTurnID: Int? {
+        guard phase == .responding, draft.isEmpty else { return nil }
+        return assistantTurns.last?.id
+    }
 
     /// Full clear (Esc / fresh start): drops the transcript and all answers.
     func reset() {
@@ -553,7 +559,8 @@ private struct StatusIndicator: View {
     /// Only animates while the island is open.
     var active: Bool
 
-    @State private var ping = false
+    /// One ping cycle, in seconds.
+    private let pingPeriod: TimeInterval = 1.5
 
     private var tint: Color {
         switch phase {
@@ -584,12 +591,19 @@ private struct StatusIndicator: View {
     var body: some View {
         HStack(spacing: 11) {
             ZStack {
-                // Filled disc that expands outward from the core and fades.
-                Circle()
-                    .fill(tint)
-                    .frame(width: 9, height: 9)
-                    .scaleEffect(ping ? 2.3 : 1)
-                    .opacity(ping ? 0 : 0.5)
+                // A ring that expands outward from the core and fades. Driven by
+                // wall-clock time via TimelineView rather than a repeatForever
+                // animation, which SwiftUI restarts on unrelated re-renders and
+                // makes the dot blink. The schedule pauses when there's nothing
+                // to pulse so it costs nothing at rest.
+                TimelineView(.animation(paused: !shouldPulse)) { context in
+                    let t = pingProgress(at: context.date)
+                    Circle()
+                        .fill(tint)
+                        .frame(width: 9, height: 9)
+                        .scaleEffect(1 + 1.3 * t)
+                        .opacity(shouldPulse ? 0.5 * (1 - t) : 0)
+                }
                 // Core dot — constant.
                 Circle()
                     .fill(tint)
@@ -603,15 +617,14 @@ private struct StatusIndicator: View {
                 .foregroundStyle(.white.opacity(0.92))
         }
         .animation(.easeInOut(duration: 0.25), value: phase)
-        .onChange(of: shouldPulse, initial: true) { _, pulsing in
-            if pulsing {
-                withAnimation(.easeOut(duration: 1.5).repeatForever(autoreverses: false)) {
-                    ping = true
-                }
-            } else {
-                ping = false
-            }
-        }
+    }
+
+    /// Eased 0→1 sawtooth over `pingPeriod`, keyed off absolute time so the
+    /// cycle is continuous and never restarts when the view re-renders.
+    private func pingProgress(at date: Date) -> CGFloat {
+        let phase = date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: pingPeriod) / pingPeriod
+        let t = CGFloat(phase)
+        return t * (2 - t)  // ease-out
     }
 }
 

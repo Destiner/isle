@@ -8,13 +8,13 @@ import ApplicationServices
 import Carbon.HIToolbox
 
 /// Watches the physical fn / 🌐 (Globe) key system-wide and reports each tap,
-/// plus global Enter (submit) and Escape (dismiss) presses.
+/// plus global Enter (submit) presses.
 ///
 /// fn is a hardware modifier, not a regular key, so it can't be a Carbon hotkey.
 /// Instead we observe `.flagsChanged` events and key off `kVK_Function` (keyCode 63).
 ///
 /// Permissions: `.flagsChanged` monitoring (fn) needs **Accessibility**, but
-/// global `.keyDown` monitoring (Enter / Esc) is gated separately behind **Input
+/// global `.keyDown` monitoring (Enter) is gated separately behind **Input
 /// Monitoring** — without it those monitors install silently but never fire.
 /// We request both. (Global monitoring also requires the App Sandbox off.)
 final class FnKeyMonitor {
@@ -22,8 +22,6 @@ final class FnKeyMonitor {
     var onToggle: (() -> Void)?
     /// Fired when Enter / Return is pressed (submit the current dictation).
     var onSubmit: (() -> Void)?
-    /// Fired when the Escape key is pressed (used to dismiss Isle).
-    var onEscape: (() -> Void)?
 
     private var globalMonitor: Any?
     private var localMonitor: Any?
@@ -50,15 +48,13 @@ final class FnKeyMonitor {
             return event
         }
 
-        // Enter (submit) and Escape (dismiss), globally. Passive monitor — it
-        // observes without swallowing the event, so it won't interfere with the
-        // frontmost app. AppDelegate ignores Enter unless Isle is visible.
+        // Enter (submit), globally. Passive monitor — it observes without
+        // swallowing the event, so it won't interfere with the frontmost app.
+        // AppDelegate ignores Enter unless Isle is visible.
         keyDownMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
             switch event.keyCode {
             case UInt16(kVK_Return), UInt16(kVK_ANSI_KeypadEnter):
                 self?.onSubmit?()
-            case UInt16(kVK_Escape):
-                self?.onEscape?()
             default:
                 break
             }
@@ -70,7 +66,7 @@ final class FnKeyMonitor {
         let key = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
         AXIsProcessTrustedWithOptions([key: true] as CFDictionary)
 
-        // Input Monitoring — required for the global Enter / Esc (`.keyDown`)
+        // Input Monitoring — required for the global Enter (`.keyDown`)
         // monitor; not covered by Accessibility. Prompts once; grant needs a relaunch.
         if !CGPreflightListenEventAccess() {
             CGRequestListenEventAccess()

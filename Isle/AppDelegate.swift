@@ -21,6 +21,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private let mode: InputMode = .text
 
+    // After this long with the pill closed, the conversation is cleared so the
+    // next open starts fresh. Armed on hide, cancelled on show.
+    private let idleTimeout: TimeInterval = 5 * 60
+    private var idleTimer: Timer?
+
     private let pillSize = CGSize(width: 150, height: 40)
     private let topRoom: CGFloat = 30     // headroom above the pill for the animation
     private let topGap: CGFloat = 6       // gap between the notch and the resting pill
@@ -52,7 +57,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             )
         )
         panel.setContentSize(panelSize)
-        panel.onDismiss = { [weak self] in self?.dismiss() }
         self.panel = panel
 
         // Voice only: load (and download on first run) the transcription model.
@@ -114,15 +118,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 break
             }
         }
-        // Esc clears the conversation and dismisses the pill.
-        fnMonitor.onEscape = { [weak self] in
-            self?.dismiss()
-        }
         fnMonitor.start()
     }
 
     private func show() {
         guard let panel else { return }
+        cancelIdleTimer()
         positionBelowNotch(panel)
         if mode == .text {
             // Text mode needs the field to receive keystrokes. The panel is a
@@ -148,15 +149,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         dictation.submitText(trimmed)
     }
 
-    /// Clears the conversation and collapses the pill.
-    private func dismiss() {
-        guard state.isOpen else { return }
-        dictation.clearHistory()
-        hide()
-    }
-
     private func hide() {
         state.isOpen = false
+        armIdleTimer()
         // Keep the panel on screen until the collapse animation finishes, then
         // hide it and reset so nothing flashes on the next open.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
@@ -164,6 +159,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.panel?.orderOut(nil)
             self.state.reset()
         }
+    }
+
+    /// While the pill is closed, count down to clearing the model-facing
+    /// conversation history so a later open starts a new conversation. (The
+    /// on-screen state is already cleared by `hide()`; only `history` persists.)
+    private func armIdleTimer() {
+        idleTimer?.invalidate()
+        idleTimer = Timer.scheduledTimer(withTimeInterval: idleTimeout, repeats: false) { [weak self] _ in
+            self?.dictation.clearHistory()
+        }
+    }
+
+    private func cancelIdleTimer() {
+        idleTimer?.invalidate()
+        idleTimer = nil
     }
 
     /// Center horizontally so the pill's top edge rests just below the notch.

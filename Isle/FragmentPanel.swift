@@ -9,9 +9,6 @@ import SwiftUI
 /// A borderless, transparent, floating panel that hosts SwiftUI content.
 /// Behaves like a Spotlight/Raycast-style overlay rather than a normal window.
 final class FragmentPanel: NSPanel {
-    /// Called when the user dismisses the fragment (Escape).
-    var onDismiss: (() -> Void)?
-
     init(rootView: some View) {
         super.init(
             contentRect: NSRect(x: 0, y: 0, width: 180, height: 38),
@@ -41,8 +38,7 @@ final class FragmentPanel: NSPanel {
     // Borderless panels can't become key by default; we need keyboard input.
     override var canBecomeKey: Bool { true }
 
-    // Escape dismisses the fragment.
-    override func cancelOperation(_ sender: Any?) {
-        onDismiss?()
-    }
+    // Swallow Escape: it no longer dismisses the pill, and overriding here keeps
+    // the default NSResponder beep from firing when the field is focused.
+    override func cancelOperation(_ sender: Any?) {}
 }
