@@ -39,16 +39,13 @@ struct CodexClient {
         }
     }
 
-    /// Keep reasoning effort low so spoken Q&A feels responsive rather than
-    /// agentic; bump this for harder requests.
-    private let reasoningEffort = "low"
-
     /// Runs `codex exec` non-interactively and returns its final assistant
     /// message. `history` is the conversation so far (excluding `prompt`), which
     /// is replayed in the request so Codex has the full context — `codex exec`
     /// is one-shot per process, so we carry context ourselves rather than
-    /// resuming a session. Suspends until the CLI exits.
-    func send(_ prompt: String, history: [Turn] = []) async throws -> String {
+    /// resuming a session. `effort` is `model_reasoning_effort` (low keeps spoken
+    /// Q&A snappy; see `Preferences`). Suspends until the CLI exits.
+    func send(_ prompt: String, history: [Turn] = [], effort: String = "low") async throws -> String {
         let composed = composePrompt(latest: prompt, history: history)
 
         let outURL = FileManager.default.temporaryDirectory
@@ -78,7 +75,7 @@ struct CodexClient {
         var env = ProcessInfo.processInfo.environment
         env["ISLE_OUT"] = outURL.path
         env["ISLE_WD"] = workDir.path
-        env["ISLE_EFFORT"] = reasoningEffort
+        env["ISLE_EFFORT"] = effort
         process.environment = env
 
         let stdinPipe = Pipe()

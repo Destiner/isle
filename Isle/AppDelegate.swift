@@ -6,25 +6,21 @@
 import AppKit
 import SwiftUI
 
-/// How the user composes a request. The two modes are switched live with Tab
-/// while the pill is open; the last-used mode is remembered across launches.
-enum InputMode: String {
-    case voice
-    case text
-}
-
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var panel: FragmentPanel?
     private let fnMonitor = FnKeyMonitor()
     private let state = IslandState()
-    private let dictation = DictationManager()
+
+    // All tunable behavior lives here (defaults for now; the seam for a future
+    // settings UI). Shared with the pieces that read it.
+    private let preferences = Preferences()
+    private lazy var dictation = DictationManager(preferences: preferences)
 
     // The last-used input mode, persisted so a relaunch restores it.
     private static let modeKey = "inputMode"
 
-    // After this long with the pill closed, the conversation is cleared so the
-    // next open starts fresh. Armed on hide, cancelled on show.
-    private let idleTimeout: TimeInterval = 5 * 60
+    // The conversation is cleared after the pill sits closed past
+    // `preferences.idleTimeout`. Armed on hide, cancelled on show.
     private var idleTimer: Timer?
 
     private let pillSize = CGSize(width: 150, height: 40)
@@ -46,9 +42,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Background agent: no Dock icon, no menu bar.
         NSApp.setActivationPolicy(.accessory)
 
-        // Restore the last-used mode (default to text on first launch).
+        // Restore the last-used mode (falling back to the default on first launch).
         state.mode = UserDefaults.standard.string(forKey: Self.modeKey)
-            .flatMap(InputMode.init(rawValue:)) ?? .text
+            .flatMap(InputMode.init(rawValue:)) ?? preferences.defaultMode
 
         let panel = FragmentPanel(
             rootView: FragmentView(
@@ -89,7 +85,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // as if Enter had been pressed from listening. Manual Enter still works as
         // an instant override (`onSubmit`).
         dictation.onEndpoint = { [weak self] in
-            guard let self, self.state.mode == .voice, self.state.isOpen,
+            guard let self, self.preferences.autoSubmitOnSilence,
+                  self.state.mode == .voice, self.state.isOpen,
                   self.state.phase == .listening else { return }
             self.state.beginThinking()
             self.dictation.finishAndRespond()
@@ -180,7 +177,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// the moment they speak, `onSpeechStart` flips into listening. Hands-free in
     /// both directions — `onEndpoint` already auto-submits from listening.
     private func armVoiceFollowUp() {
-        guard state.mode == .voice, state.isOpen, state.phase == .responding else { return }
+        guard preferences.autoListenFollowUp,
+              state.mode == .voice, state.isOpen, state.phase == .responding else { return }
         dictation.startRecording(preview: false)
     }
 
@@ -225,7 +223,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// on-screen state is already cleared by `hide()`; only `history` persists.)
     private func armIdleTimer() {
         idleTimer?.invalidate()
-        idleTimer = Timer.scheduledTimer(withTimeInterval: idleTimeout, repeats: false) { [weak self] _ in
+        idleTimer = Timer.scheduledTimer(withTimeInterval: preferences.idleTimeout, repeats: false) { [weak self] _ in
             self?.dictation.clearHistory()
         }
     }

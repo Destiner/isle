@@ -19,6 +19,14 @@ final class DictationManager {
     private var isTranscribing = false
     private var prepared = false
 
+    /// Tuning knobs (endpointing thresholds, live-preview cadence, Codex
+    /// reasoning effort) — see `Preferences`.
+    private let preferences: Preferences
+
+    init(preferences: Preferences = Preferences()) {
+        self.preferences = preferences
+    }
+
     /// The running conversation, passed back to Codex on each turn so it has the
     /// full context. Cleared by `clearHistory()` (Esc).
     private var history: [CodexClient.Turn] = []
@@ -46,8 +54,6 @@ final class DictationManager {
     /// listening the moment the user starts a follow-up — hands-free both ways.
     var onSpeechStart: (() -> Void)?
 
-    /// How often the accumulating buffer is re-transcribed for a live preview.
-    private let partialInterval: Duration = .milliseconds(350)
     /// Parakeet rejects clips shorter than 0.3 s; require a touch more.
     private let minPartialSamples = 16_000 * 4 / 10  // 0.4 s at 16 kHz
     private var partialTask: Task<Void, Never>?
@@ -55,14 +61,8 @@ final class DictationManager {
 
     // Silence-based endpointing. A cheap RMS gate ticks on its own cadence
     // (decoupled from transcription latency) and fires `onEndpoint` once the
-    // speaker has talked for at least `minSpeech` and then fallen quiet for
-    // `endpointSilence`. Thresholds are heuristic and hardware-dependent.
-    private let endpointInterval: Duration = .milliseconds(150)
-    private let endpointWindow: Double = 0.6      // trailing seconds measured for RMS
-    private let silenceThreshold: Float = 0.008   // below this the window is "quiet"
-    private let minSpeech: Double = 0.4           // speech needed before silence can end the turn
-    private let endpointSilence: Double = 1.5     // sustained quiet that triggers submit
-    private let onsetSpeech: Double = 0.2         // speech needed to flip a shown answer into listening
+    // speaker has talked for at least `preferences.minSpeech` and then fallen
+    // quiet for `preferences.endpointSilence`. Thresholds live in `Preferences`.
     private var endpointTask: Task<Void, Never>?
 
     /// Requests mic access and loads (downloading on first run) the English
@@ -138,7 +138,8 @@ final class DictationManager {
                 }
                 onFinalTranscript?(prompt)
 
-                let answer = try await codex.send(prompt, history: history)
+                let answer = try await codex.send(
+                    prompt, history: history, effort: preferences.reasoningEffort)
                 history.append(CodexClient.Turn(role: .user, text: prompt))
                 history.append(CodexClient.Turn(role: .assistant, text: answer))
                 onResponse?(answer)
@@ -166,7 +167,8 @@ final class DictationManager {
             do {
                 onFinalTranscript?(prompt)
 
-                let answer = try await codex.send(prompt, history: history)
+                let answer = try await codex.send(
+                    prompt, history: history, effort: preferences.reasoningEffort)
                 history.append(CodexClient.Turn(role: .user, text: prompt))
                 history.append(CodexClient.Turn(role: .assistant, text: answer))
                 onResponse?(answer)
@@ -204,7 +206,7 @@ final class DictationManager {
         partialTask?.cancel()
         partialTask = Task { [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(for: self?.partialInterval ?? .milliseconds(350))
+                try? await Task.sleep(for: self?.preferences.partialInterval ?? .milliseconds(350))
                 if Task.isCancelled { return }
                 await self?.emitPartialTranscript()
             }
@@ -218,27 +220,28 @@ final class DictationManager {
     /// the silence timing.
     private func startEndpointLoop() {
         endpointTask?.cancel()
-        let tick = Double(endpointInterval.components.seconds)
-            + Double(endpointInterval.components.attoseconds) / 1e18
+        let interval = preferences.endpointInterval
+        let tick = Double(interval.components.seconds)
+            + Double(interval.components.attoseconds) / 1e18
         endpointTask = Task { [weak self] in
             var speech = 0.0
             var silence = 0.0
             var onsetFired = false
             while !Task.isCancelled {
-                try? await Task.sleep(for: self?.endpointInterval ?? .milliseconds(150))
+                try? await Task.sleep(for: interval)
                 guard let self, !Task.isCancelled, self.recorder.isRecording else { return }
 
-                let rms = self.recorder.trailingRMS(seconds: self.endpointWindow)
-                if rms >= self.silenceThreshold {
+                let rms = self.recorder.trailingRMS(seconds: self.preferences.endpointWindow)
+                if rms >= self.preferences.silenceThreshold {
                     speech += tick
                     silence = 0
-                    if !onsetFired, speech >= self.onsetSpeech {
+                    if !onsetFired, speech >= self.preferences.onsetSpeech {
                         onsetFired = true
                         self.onSpeechStart?()
                     }
-                } else if speech >= self.minSpeech {
+                } else if speech >= self.preferences.minSpeech {
                     silence += tick
-                    if silence >= self.endpointSilence {
+                    if silence >= self.preferences.endpointSilence {
                         self.endpointTask = nil
                         self.onEndpoint?()
                         return
