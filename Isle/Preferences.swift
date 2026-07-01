@@ -35,6 +35,26 @@ struct Preferences {
     /// snappy rather than agentic; bump it for harder requests.
     var reasoningEffort: String = "low"
 
+    /// Model `codex exec` runs. Isle uses its own isolated `CODEX_HOME` so your
+    /// personal `~/.codex/AGENTS.md` and `config.toml` don't leak into spoken
+    /// answers — which also means the model is set here, not inherited from
+    /// `~/.codex/config.toml`.
+    var codexModel: String = "gpt-5.5"
+
+    /// Isle's system prompt. Written to the isolated `CODEX_HOME`'s `AGENTS.md`,
+    /// it replaces the personal dev instructions Codex would otherwise load —
+    /// tuned for short spoken answers rather than an agentic coding session.
+    var systemPrompt: String = """
+        You are Isle, an assistant living in a small pill on the user's Mac. \
+        The user speaks or types a short request and hears or reads your reply.
+
+        - Answer conversationally, the way you'd say it aloud. Keep it to one or two short \
+        sentences unless more is genuinely needed.
+        - Get straight to the point. Skip preamble, caveats, and restating the question.
+        - You can act on this Mac when asked — open apps, files, or folders, run quick \
+        commands — then confirm in a few words.
+        """
+
     // MARK: - Voice: hands-free ("auto voice")
 
     /// Auto-submit a spoken turn once the speaker falls quiet, instead of

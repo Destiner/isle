@@ -16,7 +16,22 @@ import Foundation
 /// find it when the app is launched from Finder/launchd. Any prompt noise the
 /// interactive shell emits is harmless: the prompt is fed on stdin and the final
 /// message is read back from a temp file (`-o`), not parsed from stdout.
+///
+/// Codex runs against an Isle-owned `CODEX_HOME` (see `ensureCodexHome`) so it
+/// loads Isle's own `AGENTS.md` (`systemPrompt`) instead of the user's personal
+/// `~/.codex/AGENTS.md` and `config.toml`, which are tuned for coding sessions,
+/// not spoken Q&A. The ChatGPT login is shared by symlinking `auth.json` back to
+/// the real `~/.codex`, so there are still no API keys to wire up.
 struct CodexClient {
+    /// System prompt written to the isolated `CODEX_HOME`'s `AGENTS.md`. See
+    /// `Preferences.systemPrompt`.
+    var systemPrompt: String = Preferences().systemPrompt
+
+    /// Model passed to `codex exec` via `-c model`. Set here rather than
+    /// inherited, because the isolated home has no `~/.codex/config.toml`. See
+    /// `Preferences.codexModel`.
+    var model: String = Preferences().codexModel
+
     /// One message in the running conversation, replayed to Codex for context.
     struct Turn {
         enum Role: String { case user = "User", assistant = "Assistant" }
@@ -106,14 +121,19 @@ struct CodexClient {
             "-ilc",
             "codex exec --skip-git-repo-check --ephemeral "
                 + "--dangerously-bypass-approvals-and-sandbox "
-                + "--color never -c model_reasoning_effort=\"$ISLE_EFFORT\" "
+                + "--color never -c model=\"$ISLE_MODEL\" "
+                + "-c model_reasoning_effort=\"$ISLE_EFFORT\" "
                 + "-C \"$ISLE_WD\" -o \"$ISLE_OUT\" -",
         ]
 
         var env = ProcessInfo.processInfo.environment
+        // Point Codex at Isle's own config dir so it loads Isle's system prompt,
+        // not the user's personal ~/.codex/AGENTS.md (see `ensureCodexHome`).
+        env["CODEX_HOME"] = (try? ensureCodexHome().path) ?? env["CODEX_HOME"]
         env["ISLE_OUT"] = outURL.path
         env["ISLE_WD"] = workDir.path
         env["ISLE_EFFORT"] = effort
+        env["ISLE_MODEL"] = model
         process.environment = env
 
         let stdinPipe = Pipe()
@@ -175,5 +195,38 @@ struct CodexClient {
         }
         lines.append("User: \(latest)")
         return lines.joined(separator: "\n")
+    }
+
+    /// Prepares Isle's private Codex config dir and returns it for `CODEX_HOME`.
+    /// It holds Isle's `AGENTS.md` (the system prompt, rewritten every run so it
+    /// stays the source of truth) and an `auth.json` symlink back to the real
+    /// `~/.codex` so the ChatGPT login is shared — no separate `codex login`.
+    ///
+    /// The symlink is re-created whenever it's missing or no longer points at the
+    /// real auth: Codex only rewrites `auth.json` on a token refresh (rare, and
+    /// via temp-file-then-rename, which would replace the symlink with a real
+    /// file), so restoring it here keeps the shared-login invariant. Isle also
+    /// gets its own fresh memories/goals/session state under this home, isolated
+    /// from the user's coding sessions.
+    private func ensureCodexHome() throws -> URL {
+        let fm = FileManager.default
+        let home = try fm.url(
+            for: .applicationSupportDirectory, in: .userDomainMask,
+            appropriateFor: nil, create: true)
+            .appendingPathComponent("Isle/codex-home", isDirectory: true)
+        try fm.createDirectory(at: home, withIntermediateDirectories: true)
+
+        let agents = home.appendingPathComponent("AGENTS.md")
+        try systemPrompt.write(to: agents, atomically: true, encoding: .utf8)
+
+        let realAuth = fm.homeDirectoryForCurrentUser
+            .appendingPathComponent(".codex/auth.json")
+        let link = home.appendingPathComponent("auth.json")
+        let dest = try? fm.destinationOfSymbolicLink(atPath: link.path)
+        if dest != realAuth.path {
+            try? fm.removeItem(at: link)
+            try fm.createSymbolicLink(at: link, withDestinationURL: realAuth)
+        }
+        return home
     }
 }

@@ -14,7 +14,7 @@ import FluidAudio
 @MainActor
 final class DictationManager {
     private let recorder = AudioRecorder()
-    private let codex = CodexClient()
+    private let codex: CodexClient
     private var asr: AsrManager?
     private var isTranscribing = false
     private var prepared = false
@@ -25,6 +25,8 @@ final class DictationManager {
 
     init(preferences: Preferences = Preferences()) {
         self.preferences = preferences
+        self.codex = CodexClient(
+            systemPrompt: preferences.systemPrompt, model: preferences.codexModel)
     }
 
     /// The running conversation, passed back to Codex on each turn so it has the
