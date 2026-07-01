@@ -67,6 +67,10 @@ final class IslandState: ObservableObject {
     @Published var draft: String = ""
     /// Active input mode; flipped live by Tab (see AppDelegate.switchMode).
     @Published var mode: InputMode = .text
+    /// True while the shown response is an error notice, so the status header
+    /// reads "Error" (red) instead of "Ready" (green). Otherwise an error turn
+    /// behaves like any response (stays on screen; voice re-arms for a retry).
+    @Published private(set) var isError = false
 
     /// Wrap width (pill width minus padding); set by the view once laid out.
     var availableTextWidth: CGFloat = 344
@@ -94,6 +98,7 @@ final class IslandState: ObservableObject {
         assistantTurns = []
         draft = ""
         phase = .listening
+        isError = false
     }
 
     /// Begins a new user turn while keeping the conversation: the previous
@@ -103,11 +108,13 @@ final class IslandState: ObservableObject {
         clearTranscript()
         draft = ""
         phase = .listening
+        isError = false
     }
 
     /// Speech capture is done; we're now waiting on Codex.
     func beginThinking() {
         phase = .thinking
+        isError = false
     }
 
     /// Codex answered: append it as the active turn (white, full).
@@ -116,6 +123,19 @@ final class IslandState: ObservableObject {
         assistantTurns.append(AssistantTurn(id: turnCounter, text: text))
         clearTranscript()
         phase = .responding
+        isError = false
+    }
+
+    /// Codex failed: show the error notice as the active turn, flagged so the
+    /// status header reads "Error" (red). Otherwise identical to `showResponse`
+    /// — the notice stays on screen and, in voice mode, the mic re-arms so the
+    /// user can simply speak the request again.
+    func showError(_ text: String) {
+        turnCounter += 1
+        assistantTurns.append(AssistantTurn(id: turnCounter, text: text))
+        clearTranscript()
+        phase = .responding
+        isError = true
     }
 
     /// An empty/failed capture: fall back to the previous answer if there is one
@@ -126,6 +146,7 @@ final class IslandState: ObservableObject {
         clearTranscript()
         guard hasHistory else { return false }
         phase = .responding
+        isError = false
         return true
     }
 
@@ -302,7 +323,7 @@ struct FragmentView: View {
         // Center-aligned so the status indicator stays centered as the pill
         // widens; the transcript/answers keep their own full-width leading frame.
         VStack(alignment: .center, spacing: 10) {
-            StatusIndicator(phase: state.phase, mode: state.mode, active: state.isOpen)
+            StatusIndicator(phase: state.phase, isError: state.isError, mode: state.mode, active: state.isOpen)
 
             ForEach(visibleTurns) { turn in
                 ResponseBubble(text: turn.text, active: turn.id == state.activeTurnID)
@@ -558,6 +579,9 @@ private struct TranscriptText: View {
 /// breathes while a soft ring pings outward — subtle, not blinky.
 private struct StatusIndicator: View {
     var phase: IslandPhase
+    /// Overrides the phase colors/label with a red "Error" when the shown
+    /// response is a failure notice.
+    var isError: Bool
     var mode: InputMode
     /// Only animates while the island is open.
     var active: Bool
@@ -566,18 +590,20 @@ private struct StatusIndicator: View {
     private let pingPeriod: TimeInterval = 1.5
 
     private var tint: Color {
+        if isError { return Color(red: 0.95, green: 0.36, blue: 0.38) }  // red
         switch phase {
-        case .listening: Color(red: 0.20, green: 0.80, blue: 0.80)  // teal
-        case .thinking: Color(red: 0.95, green: 0.72, blue: 0.30)   // amber
-        case .responding: Color(red: 0.30, green: 0.82, blue: 0.46) // green
+        case .listening: return Color(red: 0.20, green: 0.80, blue: 0.80)  // teal
+        case .thinking: return Color(red: 0.95, green: 0.72, blue: 0.30)   // amber
+        case .responding: return Color(red: 0.30, green: 0.82, blue: 0.46) // green
         }
     }
 
     private var label: String {
+        if isError { return "Error" }
         switch phase {
-        case .listening: mode == .text ? "Ask" : "Listening"
-        case .thinking: "Thinking"
-        case .responding: "Ready"
+        case .listening: return mode == .text ? "Ask" : "Listening"
+        case .thinking: return "Thinking"
+        case .responding: return "Ready"
         }
     }
 

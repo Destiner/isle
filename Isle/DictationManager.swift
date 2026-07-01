@@ -148,7 +148,7 @@ final class DictationManager {
                 onNoResponse?(error.localizedDescription)
             } catch {
                 NSLog("Isle: transcription failed: \(error)")
-                onNoResponse?("Couldn't transcribe that.")
+                onNoResponse?("Couldn't transcribe that")
             }
         }
     }
@@ -177,7 +177,7 @@ final class DictationManager {
                 onNoResponse?(error.localizedDescription)
             } catch {
                 NSLog("Isle: codex request failed: \(error)")
-                onNoResponse?("Something went wrong.")
+                onNoResponse?("Something went wrong")
             }
         }
     }

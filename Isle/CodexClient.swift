@@ -24,18 +24,54 @@ struct CodexClient {
         let text: String
     }
 
+    /// A failed Codex run, mapped to a short, human-readable line for the pill.
+    /// The raw stderr is logged (not shown) — these are display strings, so the
+    /// full banner never reaches the user. `classify(exitCode:stderr:)` picks the
+    /// case from common Codex failure signatures; anything unrecognized is `.failed`.
     enum CodexError: LocalizedError {
-        case launchFailed(String)
-        case nonZeroExit(code: Int32, stderr: String)
-        case emptyResponse
+        case launchFailed         // the process couldn't even start (e.g. no zsh)
+        case notInstalled         // codex isn't on PATH (zsh exits 127)
+        case usageLimit           // hit the ChatGPT/Codex usage cap
+        case notAuthenticated     // needs `codex login`
+        case modelUnavailable     // unknown/unsupported model
+        case serviceUnavailable   // network down / OpenAI 5xx
+        case failed               // an unrecognized non-zero exit
+        case emptyResponse        // exited cleanly but wrote no message
 
         var errorDescription: String? {
             switch self {
-            case .launchFailed(let message): "Couldn't launch Codex: \(message)"
-            case .nonZeroExit(_, let stderr):
-                "Codex failed: \(stderr.isEmpty ? "unknown error" : stderr)"
-            case .emptyResponse: "Codex returned an empty response."
+            case .launchFailed:       "Couldn't start Codex"
+            case .notInstalled:       "Codex CLI not found"
+            case .usageLimit:         "Codex usage limit reached"
+            case .notAuthenticated:   "Codex isn't signed in"
+            case .modelUnavailable:   "Codex model unavailable"
+            case .serviceUnavailable: "Can't reach Codex"
+            case .failed:             "Codex failed"
+            case .emptyResponse:      "Codex had nothing to say"
             }
+        }
+
+        /// Maps a non-zero `codex exec` run to a display case by scanning stderr
+        /// for well-known markers. Order matters: the usage-limit / auth checks run
+        /// before the broad `model` check because Codex's startup banner always
+        /// prints `model: …`, which would otherwise swallow more specific failures.
+        static func classify(exitCode: Int32, stderr: String) -> CodexError {
+            let lower = stderr.lowercased()
+            if exitCode == 127 || lower.contains("command not found") { return .notInstalled }
+            if lower.contains("usage limit") || lower.contains("rate limit")
+                || lower.contains("429") { return .usageLimit }
+            if lower.contains("not logged in") || lower.contains("codex login")
+                || lower.contains("unauthorized") || lower.contains("401") {
+                return .notAuthenticated
+            }
+            if lower.contains("model") && (lower.contains("not found")
+                || lower.contains("does not exist") || lower.contains("unknown")
+                || lower.contains("unsupported")) { return .modelUnavailable }
+            if lower.contains("connection") || lower.contains("network")
+                || lower.contains("timed out") || lower.contains("timeout")
+                || lower.contains("502") || lower.contains("503")
+                || lower.contains("service unavailable") { return .serviceUnavailable }
+            return .failed
         }
     }
 
@@ -95,8 +131,9 @@ struct CodexClient {
                 try? FileManager.default.removeItem(at: outURL)
 
                 guard proc.terminationStatus == 0 else {
-                    continuation.resume(throwing: CodexError.nonZeroExit(
-                        code: proc.terminationStatus, stderr: stderr))
+                    NSLog("Isle: codex exited \(proc.terminationStatus): \(stderr)")
+                    continuation.resume(throwing: CodexError.classify(
+                        exitCode: proc.terminationStatus, stderr: stderr))
                     return
                 }
                 guard let message, !message.isEmpty else {
@@ -109,7 +146,8 @@ struct CodexClient {
             do {
                 try process.run()
             } catch {
-                continuation.resume(throwing: CodexError.launchFailed(error.localizedDescription))
+                NSLog("Isle: couldn't launch codex: \(error)")
+                continuation.resume(throwing: CodexError.launchFailed)
                 return
             }
 

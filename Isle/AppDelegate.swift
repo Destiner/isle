@@ -96,7 +96,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         dictation.onNoResponse = { [weak self] error in
             guard let self else { return }
             if let error {
-                self.state.showResponse("⚠️ \(error)")
+                self.state.showError(error)
                 self.armVoiceFollowUp()
             } else if self.state.cancelTurn() {
                 self.armVoiceFollowUp()
