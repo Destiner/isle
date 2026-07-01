@@ -123,6 +123,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if self.state.isOpen {
                 if self.state.mode == .voice { self.dictation.cancelRecording() }
                 self.hide()
+            } else if self.state.hasHistory {
+                // Reopening within the idle window (history not yet cleared):
+                // restore the last answer instead of starting blank. Voice re-arms
+                // the follow-up mic just like it does after an answer lands.
+                self.state.restore()
+                self.show()
+                if self.state.mode == .voice { self.armVoiceFollowUp() }
             } else {
                 self.state.startTurn()
                 self.show()
@@ -214,17 +221,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
             guard let self, !self.state.isOpen else { return }
             self.panel?.orderOut(nil)
-            self.state.reset()
+            self.state.prepareForClose()
         }
     }
 
-    /// While the pill is closed, count down to clearing the model-facing
-    /// conversation history so a later open starts a new conversation. (The
-    /// on-screen state is already cleared by `hide()`; only `history` persists.)
+    /// While the pill is closed, count down to clearing the conversation so a
+    /// later open starts fresh: both the model-facing `history` and the on-screen
+    /// answers (kept across hide by `prepareForClose` so a reopen within this
+    /// window can restore the last one).
     private func armIdleTimer() {
         idleTimer?.invalidate()
         idleTimer = Timer.scheduledTimer(withTimeInterval: preferences.idleTimeout, repeats: false) { [weak self] _ in
-            self?.dictation.clearHistory()
+            guard let self else { return }
+            self.dictation.clearHistory()
+            self.state.reset()
         }
     }
 

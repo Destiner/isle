@@ -92,13 +92,30 @@ final class IslandState: ObservableObject {
         return assistantTurns.last?.id
     }
 
-    /// Full clear (Esc / fresh start): drops the transcript and all answers.
+    /// Full clear (fresh start / conversation idled out): drops the transcript
+    /// and all answers.
     func reset() {
         clearTranscript()
         assistantTurns = []
         draft = ""
         phase = .listening
         isError = false
+    }
+
+    /// Closing the pill: drop the in-progress compose but keep the answers (and
+    /// the error flag) so reopening within the idle window can restore the last
+    /// one. The full clear happens later, when the idle timer fires.
+    func prepareForClose() {
+        clearTranscript()
+        draft = ""
+    }
+
+    /// Reopening within the conversation window: bring the last answer back as
+    /// the active turn — the same on-screen state as just after it landed.
+    func restore() {
+        clearTranscript()
+        draft = ""
+        phase = .responding
     }
 
     /// Begins a new user turn while keeping the conversation: the previous
