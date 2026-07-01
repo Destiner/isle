@@ -77,9 +77,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         dictation.onFinalTranscript = { [weak self] text in
             self?.state.setFinalTranscript(text)
         }
-        // Codex answered → show it in the pill (stays open until the next fn-tap).
+        // Codex answered → show it in the pill (stays open until the next fn-tap),
+        // and in voice mode silently re-open the mic so the user can just speak
+        // the follow-up (the answer stays on screen until they actually do).
         dictation.onResponse = { [weak self] answer in
-            self?.state.showResponse(answer)
+            guard let self else { return }
+            self.state.showResponse(answer)
+            self.armVoiceFollowUp()
         }
         // Voice only: the speaker fell quiet after talking — auto-submit, exactly
         // as if Enter had been pressed from listening. Manual Enter still works as
@@ -96,9 +100,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self else { return }
             if let error {
                 self.state.showResponse("⚠️ \(error)")
-            } else if !self.state.cancelTurn() {
+                self.armVoiceFollowUp()
+            } else if self.state.cancelTurn() {
+                self.armVoiceFollowUp()
+            } else {
                 self.hide()
             }
+        }
+        // Voice only: speech detected while an answer is shown → flip into
+        // listening for the follow-up. The mic is already running (armed by
+        // `armVoiceFollowUp`), so we only change phase — the buffer is kept, so
+        // the first words aren't lost. A no-op in any other phase.
+        dictation.onSpeechStart = { [weak self] in
+            guard let self, self.state.mode == .voice, self.state.isOpen,
+                  self.state.phase == .responding else { return }
+            self.state.startTurn()
+            self.dictation.enableLivePreview()
         }
 
         // Tap fn / 🌐 to toggle Isle: opening starts recording right away — speak
@@ -156,6 +173,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             dictation.prepare()        // lazy first load; no-op once loaded
             dictation.startRecording()
         }
+    }
+
+    /// After an answer is shown in voice mode, silently open the mic and run the
+    /// endpoint loop while the pill still reads "Ready". The user can keep reading;
+    /// the moment they speak, `onSpeechStart` flips into listening. Hands-free in
+    /// both directions — `onEndpoint` already auto-submits from listening.
+    private func armVoiceFollowUp() {
+        guard state.mode == .voice, state.isOpen, state.phase == .responding else { return }
+        dictation.startRecording(preview: false)
     }
 
     private func show() {

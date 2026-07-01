@@ -41,6 +41,11 @@ final class DictationManager {
     /// the clip automatically. Wired to the same path as Enter from listening.
     var onEndpoint: (() -> Void)?
 
+    /// Fired once per recording when speech is first detected. Used while an
+    /// answer is shown (mic open, "Ready" still on screen) to flip into
+    /// listening the moment the user starts a follow-up — hands-free both ways.
+    var onSpeechStart: (() -> Void)?
+
     /// How often the accumulating buffer is re-transcribed for a live preview.
     private let partialInterval: Duration = .milliseconds(350)
     /// Parakeet rejects clips shorter than 0.3 s; require a touch more.
@@ -57,6 +62,7 @@ final class DictationManager {
     private let silenceThreshold: Float = 0.008   // below this the window is "quiet"
     private let minSpeech: Double = 0.4           // speech needed before silence can end the turn
     private let endpointSilence: Double = 1.5     // sustained quiet that triggers submit
+    private let onsetSpeech: Double = 0.2         // speech needed to flip a shown answer into listening
     private var endpointTask: Task<Void, Never>?
 
     /// Requests mic access and loads (downloading on first run) the English
@@ -84,7 +90,11 @@ final class DictationManager {
     /// Starts capturing audio. Recording does not need the model loaded — the
     /// model is only required at transcription time — so this never blocks even
     /// in the brief window right after launch.
-    func startRecording() {
+    /// `preview` runs the live transcript loop; pass `false` to arm the mic for a
+    /// follow-up while an answer is still shown — only the cheap RMS endpoint loop
+    /// runs (no transcribing the user's reading-silence), and `enableLivePreview()`
+    /// starts the transcript loop once they actually speak.
+    func startRecording(preview: Bool = true) {
         do {
             try recorder.start()
         } catch {
@@ -92,8 +102,15 @@ final class DictationManager {
             return
         }
         onPartialTranscript?("")
-        startPartialLoop()
+        if preview { startPartialLoop() }
         startEndpointLoop()
+    }
+
+    /// Starts the live transcript loop on an already-running recording. Used when
+    /// a follow-up (armed with `preview: false`) turns into real listening.
+    func enableLivePreview() {
+        guard recorder.isRecording else { return }
+        startPartialLoop()
     }
 
     /// Stops recording, transcribes the clip, and sends the transcript to Codex,
@@ -206,6 +223,7 @@ final class DictationManager {
         endpointTask = Task { [weak self] in
             var speech = 0.0
             var silence = 0.0
+            var onsetFired = false
             while !Task.isCancelled {
                 try? await Task.sleep(for: self?.endpointInterval ?? .milliseconds(150))
                 guard let self, !Task.isCancelled, self.recorder.isRecording else { return }
@@ -214,6 +232,10 @@ final class DictationManager {
                 if rms >= self.silenceThreshold {
                     speech += tick
                     silence = 0
+                    if !onsetFired, speech >= self.onsetSpeech {
+                        onsetFired = true
+                        self.onSpeechStart?()
+                    }
                 } else if speech >= self.minSpeech {
                     silence += tick
                     if silence >= self.endpointSilence {
