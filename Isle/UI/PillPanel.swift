@@ -1,5 +1,5 @@
 //
-//  FragmentPanel.swift
+//  PillPanel.swift
 //  Isle
 //
 
@@ -8,7 +8,7 @@ import SwiftUI
 
 /// A borderless, transparent, floating panel that hosts SwiftUI content.
 /// Behaves like a Spotlight/Raycast-style overlay rather than a normal window.
-final class FragmentPanel: NSPanel {
+final class PillPanel: NSPanel {
     init(rootView: some View) {
         super.init(
             contentRect: NSRect(x: 0, y: 0, width: 180, height: 38),

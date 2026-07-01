@@ -1,5 +1,5 @@
 //
-//  FragmentView.swift
+//  PillView.swift
 //  Isle
 //
 
@@ -266,7 +266,7 @@ final class IslandState: ObservableObject {
 ///
 /// The hosting panel is taller than the pill (`topRoom` of empty space above)
 /// so the emerge animation can travel upward without being clipped.
-struct FragmentView: View {
+struct PillView: View {
     @ObservedObject var state: IslandState
     var pillSize: CGSize
     var topRoom: CGFloat
@@ -691,7 +691,7 @@ private struct StatusIndicator: View {
 
         That's the gist — see the [docs](https://example.com) for more.
         """)
-    return FragmentView(
+    return PillView(
         state: state,
         pillSize: CGSize(width: 150, height: 40),
         topRoom: 30,

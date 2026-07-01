@@ -7,7 +7,7 @@ import AppKit
 import SwiftUI
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    private var panel: FragmentPanel?
+    private var panel: PillPanel?
     private let fnMonitor = FnKeyMonitor()
     private let state = IslandState()
 
@@ -49,8 +49,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         state.mode = UserDefaults.standard.string(forKey: Self.modeKey)
             .flatMap(InputMode.init(rawValue:)) ?? preferences.defaultMode
 
-        let panel = FragmentPanel(
-            rootView: FragmentView(
+        let panel = PillPanel(
+            rootView: PillView(
                 state: state,
                 pillSize: pillSize,
                 topRoom: topRoom,
@@ -177,7 +177,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Toggle the input mode while the pill is open, remembering the choice. The
     /// conversation (history + on-screen answer) is kept; the in-progress compose
     /// is reset and the new mode's composer takes over — voice starts recording,
-    /// text grabs the field (via `FragmentView.syncFocus`). Ignored mid-thought.
+    /// text grabs the field (via `PillView.syncFocus`). Ignored mid-thought.
     private func switchMode() {
         guard state.isOpen, state.phase != .thinking else { return }
         if state.mode == .voice { dictation.cancelRecording() }
