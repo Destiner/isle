@@ -12,7 +12,7 @@ macOS menu-bar-less agent app. Tapping the fn / 🌐 key shows a Dynamic Island-
 
 ## Testing
 
-- There is no real test suite — `IsleTests`/`IsleUITests` are empty Xcode template stubs. The **pre-commit check is the build** (it compiles = typechecks); don't run `xcodebuild test` unless there are actual tests to run, since it launches the app-driving UITests target needlessly.
+- `IsleTests` holds fast unit tests (`CodexClient.CodexError.classify`); `IsleUITests` is still an empty Xcode stub. Run the unit tests with `-only-testing:IsleTests` (`xcodebuild test -project Isle.xcodeproj -scheme Isle -destination 'platform=macOS' -only-testing:IsleTests`) — the plain build already typechecks, and a bare `xcodebuild test` needlessly launches the app-driving UITests target.
 
 ## Stack
 

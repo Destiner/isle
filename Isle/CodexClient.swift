@@ -28,7 +28,7 @@ struct CodexClient {
     /// The raw stderr is logged (not shown) — these are display strings, so the
     /// full banner never reaches the user. `classify(exitCode:stderr:)` picks the
     /// case from common Codex failure signatures; anything unrecognized is `.failed`.
-    enum CodexError: LocalizedError {
+    enum CodexError: LocalizedError, Equatable {
         case launchFailed         // the process couldn't even start (e.g. no zsh)
         case notInstalled         // codex isn't on PATH (zsh exits 127)
         case usageLimit           // hit the ChatGPT/Codex usage cap
@@ -66,7 +66,9 @@ struct CodexClient {
             }
             if lower.contains("model") && (lower.contains("not found")
                 || lower.contains("does not exist") || lower.contains("unknown")
-                || lower.contains("unsupported")) { return .modelUnavailable }
+                || lower.contains("unsupported") || lower.contains("not supported")) {
+                return .modelUnavailable
+            }
             if lower.contains("connection") || lower.contains("network")
                 || lower.contains("timed out") || lower.contains("timeout")
                 || lower.contains("502") || lower.contains("503")
