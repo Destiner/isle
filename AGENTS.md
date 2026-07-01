@@ -10,6 +10,10 @@ macOS menu-bar-less agent app. Tapping the fn / 🌐 key shows a Dynamic Island-
 - `xcodebuild test -project Isle.xcodeproj -scheme Isle -destination 'platform=macOS'` - Run tests
 - `open $(xcodebuild -project Isle.xcodeproj -scheme Isle -configuration Debug -showBuildSettings | awk -F' = ' '/ BUILT_PRODUCTS_DIR /{d=$2}/ FULL_PRODUCT_NAME /{n=$2}END{print d"/"n}')` - Launch the built app
 
+## Testing
+
+- There is no real test suite — `IsleTests`/`IsleUITests` are empty Xcode template stubs. The **pre-commit check is the build** (it compiles = typechecks); don't run `xcodebuild test` unless there are actual tests to run, since it launches the app-driving UITests target needlessly.
+
 ## Stack
 
 - Swift 5, SwiftUI + AppKit + AVFoundation, deployment target macOS 26.3 (Apple Silicon)
