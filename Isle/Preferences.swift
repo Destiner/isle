@@ -55,6 +55,16 @@ struct Preferences {
         commands — then confirm in a few words.
         """
 
+    // MARK: - Tools (MCP)
+
+    /// Expose Isle's reminder tools to Codex over a localhost MCP server. When on,
+    /// Isle hosts the server and writes an `[mcp_servers.reminders]` entry into its
+    /// isolated `CODEX_HOME` config so `codex exec` can call it.
+    var enableReminderTools: Bool = true
+
+    /// Port the in-process MCP server binds on `127.0.0.1`. Codex connects here.
+    var mcpPort: Int = 8917
+
     // MARK: - Voice: hands-free ("auto voice")
 
     /// Auto-submit a spoken turn once the speaker falls quiet, instead of

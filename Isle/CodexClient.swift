@@ -32,6 +32,11 @@ struct CodexClient {
     /// `Preferences.codexModel`.
     var model: String = Preferences().codexModel
 
+    /// Streamable-HTTP URL of Isle's in-process MCP server (`MCPHTTPServer`). When
+    /// set, `ensureCodexHome()` writes an `[mcp_servers.reminders]` entry so Codex
+    /// can call Isle's reminder tools; when `nil`, any stale entry is removed.
+    var mcpReminderURL: String? = nil
+
     /// One message in the running conversation, replayed to Codex for context.
     struct Turn {
         enum Role: String { case user = "User", assistant = "Assistant" }
@@ -208,6 +213,28 @@ struct CodexClient {
     /// file), so restoring it here keeps the shared-login invariant. Isle also
     /// gets its own fresh memories/goals/session state under this home, isolated
     /// from the user's coding sessions.
+    /// Returns `toml` with any `[mcp_servers.reminders]` table removed — its header
+    /// line plus the key lines up to the next table header (a line starting with
+    /// `[`) or end of file — so the block can be re-written without disturbing the
+    /// rest of the file.
+    private static func removingReminderServer(from toml: String) -> String {
+        guard toml.contains("[mcp_servers.reminders]") else { return toml }
+        var kept: [Substring] = []
+        var skipping = false
+        for line in toml.split(separator: "\n", omittingEmptySubsequences: false) {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed == "[mcp_servers.reminders]" {
+                skipping = true
+                continue
+            }
+            if skipping {
+                if trimmed.hasPrefix("[") { skipping = false } else { continue }
+            }
+            kept.append(line)
+        }
+        return kept.joined(separator: "\n")
+    }
+
     private func ensureCodexHome() throws -> URL {
         let fm = FileManager.default
         let home = try fm.url(
@@ -218,6 +245,24 @@ struct CodexClient {
 
         let agents = home.appendingPathComponent("AGENTS.md")
         try systemPrompt.write(to: agents, atomically: true, encoding: .utf8)
+
+        // Register (or clear) Isle's own MCP tool server. Model/effort still come
+        // from the `-c` flags on the command line, so this config only carries the
+        // tool server. We strip any existing `[mcp_servers.reminders]` block and
+        // re-append a fresh one rather than overwriting the whole file, so config
+        // Codex manages in this home (e.g. `[projects.*]` trust entries) survives.
+        let config = home.appendingPathComponent("config.toml")
+        let existing = (try? String(contentsOf: config, encoding: .utf8)) ?? ""
+        var body = Self.removingReminderServer(from: existing)
+        if let url = mcpReminderURL {
+            if !body.isEmpty && !body.hasSuffix("\n") { body += "\n" }
+            body += "[mcp_servers.reminders]\nurl = \"\(url)\"\n"
+        }
+        if body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            try? fm.removeItem(at: config)
+        } else {
+            try body.write(to: config, atomically: true, encoding: .utf8)
+        }
 
         let realAuth = fm.homeDirectoryForCurrentUser
             .appendingPathComponent(".codex/auth.json")

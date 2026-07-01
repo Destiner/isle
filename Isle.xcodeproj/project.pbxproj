@@ -8,6 +8,10 @@
 
 /* Begin PBXBuildFile section */
 		FA1D0000000000000000AA03 /* FluidAudio in Frameworks */ = {isa = PBXBuildFile; productRef = FA1D0000000000000000AA02 /* FluidAudio */; };
+		AABB0000000000000000AA03 /* MCP in Frameworks */ = {isa = PBXBuildFile; productRef = AABB0000000000000000AA02 /* MCP */; };
+		AACC0000000000000000AA03 /* NIOCore in Frameworks */ = {isa = PBXBuildFile; productRef = AACC0000000000000000AA02 /* NIOCore */; };
+		AACC0000000000000000AA05 /* NIOPosix in Frameworks */ = {isa = PBXBuildFile; productRef = AACC0000000000000000AA04 /* NIOPosix */; };
+		AACC0000000000000000AA07 /* NIOHTTP1 in Frameworks */ = {isa = PBXBuildFile; productRef = AACC0000000000000000AA06 /* NIOHTTP1 */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -57,6 +61,10 @@
 			buildActionMask = 2147483647;
 			files = (
 				FA1D0000000000000000AA03 /* FluidAudio in Frameworks */,
+				AABB0000000000000000AA03 /* MCP in Frameworks */,
+				AACC0000000000000000AA03 /* NIOCore in Frameworks */,
+				AACC0000000000000000AA05 /* NIOPosix in Frameworks */,
+				AACC0000000000000000AA07 /* NIOHTTP1 in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -118,6 +126,10 @@
 			name = Isle;
 			packageProductDependencies = (
 				FA1D0000000000000000AA02 /* FluidAudio */,
+				AABB0000000000000000AA02 /* MCP */,
+				AACC0000000000000000AA02 /* NIOCore */,
+				AACC0000000000000000AA04 /* NIOPosix */,
+				AACC0000000000000000AA06 /* NIOHTTP1 */,
 			);
 			productName = Isle;
 			productReference = 514928592FF3092900A139AE /* Isle.app */;
@@ -203,6 +215,8 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				FA1D0000000000000000AA01 /* XCRemoteSwiftPackageReference "FluidAudio" */,
+				AABB0000000000000000AA01 /* XCRemoteSwiftPackageReference "swift-sdk" */,
+				AACC0000000000000000AA01 /* XCRemoteSwiftPackageReference "swift-nio" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 5149285A2FF3092900A139AE /* Products */;
@@ -416,6 +430,7 @@
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Isle transcribes your speech to text while you hold the fn key.";
+				INFOPLIST_KEY_NSRemindersFullAccessUsageDescription = "Isle reads and edits your reminders when you ask it to.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -451,6 +466,7 @@
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Isle transcribes your speech to text while you hold the fn key.";
+				INFOPLIST_KEY_NSRemindersFullAccessUsageDescription = "Isle reads and edits your reminders when you ask it to.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -598,6 +614,22 @@
 				minimumVersion = 0.12.4;
 			};
 		};
+		AABB0000000000000000AA01 /* XCRemoteSwiftPackageReference "swift-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/modelcontextprotocol/swift-sdk.git";
+			requirement = {
+				kind = exactVersion;
+				version = 0.12.1;
+			};
+		};
+		AACC0000000000000000AA01 /* XCRemoteSwiftPackageReference "swift-nio" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/apple/swift-nio.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.65.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -605,6 +637,26 @@
 			isa = XCSwiftPackageProductDependency;
 			package = FA1D0000000000000000AA01 /* XCRemoteSwiftPackageReference "FluidAudio" */;
 			productName = FluidAudio;
+		};
+		AABB0000000000000000AA02 /* MCP */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AABB0000000000000000AA01 /* XCRemoteSwiftPackageReference "swift-sdk" */;
+			productName = MCP;
+		};
+		AACC0000000000000000AA02 /* NIOCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AACC0000000000000000AA01 /* XCRemoteSwiftPackageReference "swift-nio" */;
+			productName = NIOCore;
+		};
+		AACC0000000000000000AA04 /* NIOPosix */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AACC0000000000000000AA01 /* XCRemoteSwiftPackageReference "swift-nio" */;
+			productName = NIOPosix;
+		};
+		AACC0000000000000000AA06 /* NIOHTTP1 */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AACC0000000000000000AA01 /* XCRemoteSwiftPackageReference "swift-nio" */;
+			productName = NIOHTTP1;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

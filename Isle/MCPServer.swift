@@ -1,0 +1,246 @@
+//
+//  MCPServer.swift
+//  Isle
+//
+
+import Foundation
+import MCP
+import NIOCore
+import NIOHTTP1
+import NIOPosix
+
+/// A localhost MCP endpoint hosted inside Isle, so Codex can call Isle's reminder
+/// tools over Streamable HTTP (`[mcp_servers.reminders] url` in `CodexClient`).
+///
+/// The MCP SDK's HTTP transport is framework-agnostic — it turns an `HTTPRequest`
+/// into an `HTTPResponse` but doesn't listen on a socket — so this wraps it in a
+/// small NIO HTTP/1.1 server, mirroring the SDK's own conformance harness (the
+/// reference impl that passes MCP conformance). Each Codex `initialize` opens a
+/// session with its own `StatefulHTTPServerTransport` + `Server`; the tools all
+/// share one `RemindersService`. Because Isle is long-lived, the server stays up
+/// across `codex exec` runs — no per-request process spawn.
+///
+/// EventKit runs in-process here, so the Reminders TCC grant attributes to Isle's
+/// own signed identity (like the mic grant) rather than to a spawned helper.
+actor MCPHTTPServer {
+    private let host = "127.0.0.1"
+    private let port: Int
+    private let endpoint = "/mcp"
+    private let tools: ReminderTools
+
+    private var group: MultiThreadedEventLoopGroup?
+    private var channel: Channel?
+    /// Live sessions, keyed by `MCP-Session-Id`. The `Server` is retained alongside
+    /// its transport so its message-handling task keeps running.
+    private var sessions: [String: (transport: StatefulHTTPServerTransport, server: Server)] = [:]
+
+    init(port: Int, service: RemindersService) {
+        self.port = port
+        self.tools = ReminderTools(service: service)
+    }
+
+    var mcpEndpoint: String { endpoint }
+
+    /// Binds the listener and serves until the channel closes (i.e. for the app's
+    /// lifetime). Call from a detached task — this does not return under normal use.
+    func start() async throws {
+        let group = MultiThreadedEventLoopGroup(numberOfThreads: 1)
+        self.group = group
+
+        let bootstrap = ServerBootstrap(group: group)
+            .serverChannelOption(ChannelOptions.backlog, value: 256)
+            .serverChannelOption(ChannelOptions.socketOption(.so_reuseaddr), value: 1)
+            .childChannelInitializer { channel in
+                channel.pipeline.configureHTTPServerPipeline().flatMap {
+                    channel.pipeline.addHandler(HTTPHandler(app: self))
+                }
+            }
+            .childChannelOption(ChannelOptions.socketOption(.so_reuseaddr), value: 1)
+
+        let channel = try await bootstrap.bind(host: host, port: port).get()
+        self.channel = channel
+        try await channel.closeFuture.get()
+    }
+
+    /// Routes a request to its session's transport, creating a session on `initialize`.
+    /// Mirrors the SDK conformance server's routing (inlined `initialize` detection
+    /// because the SDK's own classifier is `package`-level and not visible here).
+    func handle(_ request: HTTPRequest) async -> HTTPResponse {
+        let sessionID = request.header(HTTPHeaderName.sessionID)
+
+        if let sessionID, let session = sessions[sessionID] {
+            let response = await session.transport.handleRequest(request)
+            if request.method.uppercased() == "DELETE", response.statusCode == 200 {
+                await session.transport.disconnect()
+                sessions[sessionID] = nil
+            }
+            return response
+        }
+
+        if request.method.uppercased() == "POST", Self.isInitialize(request.body) {
+            return await createSession(request)
+        }
+
+        if sessionID != nil {
+            return .error(statusCode: 404, .invalidRequest("Not Found: session not found or expired"))
+        }
+        return .error(statusCode: 400, .invalidRequest("Bad Request: missing \(HTTPHeaderName.sessionID) header"))
+    }
+
+    private func createSession(_ request: HTTPRequest) async -> HTTPResponse {
+        let sessionID = UUID().uuidString
+        let transport = StatefulHTTPServerTransport(
+            sessionIDGenerator: FixedSessionID(sessionID),
+            validationPipeline: StandardValidationPipeline(validators: [
+                OriginValidator.localhost(port: port),
+                AcceptHeaderValidator(mode: .sseRequired),
+                ContentTypeValidator(),
+                ProtocolVersionValidator(),
+                SessionValidator(),
+            ]))
+        let server = makeServer()
+        do {
+            try await server.start(transport: transport)
+        } catch {
+            await transport.disconnect()
+            return .error(statusCode: 500, .internalError("Failed to start MCP session"))
+        }
+        sessions[sessionID] = (transport, server)
+
+        let response = await transport.handleRequest(request)
+        if case .error = response {
+            await transport.disconnect()
+            sessions[sessionID] = nil
+        }
+        return response
+    }
+
+    private func makeServer() -> Server {
+        let server = Server(
+            name: "isle-reminders",
+            version: "1.0.0",
+            capabilities: .init(tools: .init(listChanged: false)))
+        let tools = self.tools
+        Task {
+            await server.withMethodHandler(ListTools.self) { _ in
+                .init(tools: ReminderTools.tools)
+            }
+            await server.withMethodHandler(CallTool.self) { params in
+                await tools.call(name: params.name, arguments: params.arguments)
+            }
+        }
+        return server
+    }
+
+    private static func isInitialize(_ body: Data?) -> Bool {
+        guard let body,
+            let object = try? JSONSerialization.jsonObject(with: body) as? [String: Any] else {
+            return false
+        }
+        return object["method"] as? String == "initialize"
+    }
+}
+
+/// Fixed generator so a session's `Mcp-Session-Id` matches the key we route on.
+private struct FixedSessionID: SessionIDGenerator {
+    let id: String
+    init(_ id: String) { self.id = id }
+    func generateSessionID() -> String { id }
+}
+
+/// NIO adapter: converts NIO HTTP parts to/from the SDK's framework-agnostic
+/// `HTTPRequest`/`HTTPResponse`, delegating all MCP logic to `MCPHTTPServer`.
+/// Handles the SSE (`.stream`) response case that the stateful transport uses.
+private nonisolated final class HTTPHandler: ChannelInboundHandler, @unchecked Sendable {
+    typealias InboundIn = HTTPServerRequestPart
+    typealias OutboundOut = HTTPServerResponsePart
+
+    private let app: MCPHTTPServer
+    private var head: HTTPRequestHead?
+    private var body: ByteBuffer?
+
+    init(app: MCPHTTPServer) { self.app = app }
+
+    func channelRead(context: ChannelHandlerContext, data: NIOAny) {
+        switch unwrapInboundIn(data) {
+        case .head(let head):
+            self.head = head
+            self.body = context.channel.allocator.buffer(capacity: 0)
+        case .body(var chunk):
+            self.body?.writeBuffer(&chunk)
+        case .end:
+            guard let head = self.head else { return }
+            let bodyBuffer = self.body
+            self.head = nil
+            self.body = nil
+            nonisolated(unsafe) let ctx = context
+            Task { await self.process(head: head, body: bodyBuffer, context: ctx) }
+        }
+    }
+
+    private func process(head: HTTPRequestHead, body: ByteBuffer?, context: ChannelHandlerContext) async {
+        let path = head.uri.split(separator: "?").first.map(String.init) ?? head.uri
+        guard path == (await app.mcpEndpoint) else {
+            write(.error(statusCode: 404, .invalidRequest("Not Found")), version: head.version, context: context)
+            return
+        }
+        let response = await app.handle(makeRequest(head: head, body: body, path: path))
+        write(response, version: head.version, context: context)
+    }
+
+    private func makeRequest(head: HTTPRequestHead, body: ByteBuffer?, path: String) -> HTTPRequest {
+        var headers: [String: String] = [:]
+        for (name, value) in head.headers {
+            headers[name] = headers[name].map { "\($0), \(value)" } ?? value
+        }
+        let data = body.flatMap { buffer -> Data? in
+            guard buffer.readableBytes > 0,
+                let bytes = buffer.getBytes(at: 0, length: buffer.readableBytes) else { return nil }
+            return Data(bytes)
+        }
+        return HTTPRequest(method: head.method.rawValue, headers: headers, body: data, path: path)
+    }
+
+    private func write(_ response: HTTPResponse, version: HTTPVersion, context: ChannelHandlerContext) {
+        nonisolated(unsafe) let ctx = context
+        let status = HTTPResponseStatus(statusCode: response.statusCode)
+        let headers = response.headers
+
+        if case .stream(let stream, _) = response {
+            ctx.eventLoop.execute {
+                var head = HTTPResponseHead(version: version, status: status)
+                for (name, value) in headers { head.headers.add(name: name, value: value) }
+                ctx.write(self.wrapOutboundOut(.head(head)), promise: nil)
+                ctx.flush()
+            }
+            Task {
+                do {
+                    for try await chunk in stream {
+                        ctx.eventLoop.execute {
+                            var buffer = ctx.channel.allocator.buffer(capacity: chunk.count)
+                            buffer.writeBytes(chunk)
+                            ctx.writeAndFlush(self.wrapOutboundOut(.body(.byteBuffer(buffer))), promise: nil)
+                        }
+                    }
+                } catch {}
+                ctx.eventLoop.execute {
+                    ctx.writeAndFlush(self.wrapOutboundOut(.end(nil)), promise: nil)
+                }
+            }
+            return
+        }
+
+        let bodyData = response.bodyData
+        ctx.eventLoop.execute {
+            var head = HTTPResponseHead(version: version, status: status)
+            for (name, value) in headers { head.headers.add(name: name, value: value) }
+            ctx.write(self.wrapOutboundOut(.head(head)), promise: nil)
+            if let bodyData {
+                var buffer = ctx.channel.allocator.buffer(capacity: bodyData.count)
+                buffer.writeBytes(bodyData)
+                ctx.write(self.wrapOutboundOut(.body(.byteBuffer(buffer))), promise: nil)
+            }
+            ctx.writeAndFlush(self.wrapOutboundOut(.end(nil)), promise: nil)
+        }
+    }
+}

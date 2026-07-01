@@ -26,7 +26,9 @@ final class DictationManager {
     init(preferences: Preferences = Preferences()) {
         self.preferences = preferences
         self.codex = CodexClient(
-            systemPrompt: preferences.systemPrompt, model: preferences.codexModel)
+            systemPrompt: preferences.systemPrompt, model: preferences.codexModel,
+            mcpReminderURL: preferences.enableReminderTools
+                ? "http://127.0.0.1:\(preferences.mcpPort)/mcp" : nil)
     }
 
     /// The running conversation, passed back to Codex on each turn so it has the

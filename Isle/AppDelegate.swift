@@ -16,6 +16,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let preferences = Preferences()
     private lazy var dictation = DictationManager(preferences: preferences)
 
+    // Hosts Isle's reminder tools as a localhost MCP server for Codex to call.
+    private var mcpServer: MCPHTTPServer?
+
     // The last-used input mode, persisted so a relaunch restores it.
     private static let modeKey = "inputMode"
 
@@ -63,6 +66,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // (prepare() is idempotent, so the lazy load on a later Tab switch is safe.)
         if state.mode == .voice {
             dictation.prepare()
+        }
+
+        // Bring up the MCP tool server so Codex can act on Reminders. Runs for the
+        // app's lifetime; `start()` serves until the process exits, so detach it.
+        if preferences.enableReminderTools {
+            let server = MCPHTTPServer(port: preferences.mcpPort, service: RemindersService())
+            mcpServer = server
+            Task.detached {
+                do { try await server.start() }
+                catch { NSLog("Isle: MCP server failed to start: \(error)") }
+            }
         }
 
         // Stream recognized speech into the pill as the user talks.
