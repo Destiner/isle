@@ -106,11 +106,15 @@ enum Log {
              ["source": source.rawValue, "text": text, "chars": text.count])
     }
 
-    /// Records the assistant's answer for the current turn.
+    /// Records the assistant's answer, closing the turn. Events that fire between
+    /// turns (the hands-free follow-up mic arming, ASR load) then log against the
+    /// conversation with no `turn`, rather than being mis-tagged to the one that
+    /// just ended.
     static func turnAssistant(text: String) {
         guard isEnabled else { return }
         emit(.conversation, cat: "turn", event: "assistant", level: .info,
              ["text": text, "chars": text.count])
+        lock.lock(); currentTurn = nil; lock.unlock()
     }
 
     // MARK: - Codex
@@ -138,7 +142,9 @@ enum Log {
 
     // MARK: - Tools (MCP)
 
-    static func tool(name: String, arguments: String, isError: Bool, resultChars: Int, durationMs: Int) {
+    /// `arguments` is a Foundation JSON object (dict/array/scalar), embedded as a
+    /// nested object so it stays queryable (`jq '.arguments.query'`).
+    static func tool(name: String, arguments: Any, isError: Bool, resultChars: Int, durationMs: Int) {
         guard isEnabled else { return }
         emit(.conversation, cat: "tool", event: "call",
              level: isError ? .warn : .info,

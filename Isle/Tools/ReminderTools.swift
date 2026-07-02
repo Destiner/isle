@@ -87,10 +87,20 @@ nonisolated struct ReminderTools: Sendable {
             if case let .text(text, _, _) = item { return acc + text.count }
             return acc
         }
-        Log.tool(name: name, arguments: arguments.map { "\($0)" } ?? "{}",
+        Log.tool(name: name, arguments: Self.jsonObject(arguments),
                  isError: result.isError == true, resultChars: chars,
                  durationMs: Int(Date().timeIntervalSince(start) * 1000))
         return result
+    }
+
+    /// Converts MCP call arguments into a Foundation JSON object so they log as a
+    /// nested object rather than a Swift-`description` string. Empty/absent → `{}`.
+    private static func jsonObject(_ arguments: [String: Value]?) -> Any {
+        guard let arguments, !arguments.isEmpty,
+              let data = try? JSONEncoder().encode(arguments),
+              let object = try? JSONSerialization.jsonObject(with: data)
+        else { return [String: Any]() }
+        return object
     }
 
     private func dispatch(name: String, arguments: [String: Value]?) async -> CallTool.Result {
