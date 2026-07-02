@@ -16,7 +16,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let preferences = Preferences()
     private lazy var dictation = DictationManager(preferences: preferences)
 
-    // Hosts Isle's reminder tools as a localhost MCP server for Codex to call.
+    // Hosts Isle's reminder + mail tools as a localhost MCP server for Codex to call.
     private var mcpServer: MCPHTTPServer?
 
     // The last-used input mode, persisted so a relaunch restores it.
@@ -72,10 +72,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             dictation.prepare()
         }
 
-        // Bring up the MCP tool server so Codex can act on Reminders. Runs for the
-        // app's lifetime; `start()` serves until the process exits, so detach it.
-        if preferences.enableReminderTools {
-            let server = MCPHTTPServer(port: preferences.mcpPort, service: RemindersService())
+        // Bring up the MCP tool server so Codex can act on Reminders and Mail. Runs
+        // for the app's lifetime; `start()` serves until the process exits, so detach.
+        if preferences.enableReminderTools || preferences.enableMailTools {
+            let server = MCPHTTPServer(
+                port: preferences.mcpPort,
+                reminders: preferences.enableReminderTools ? RemindersService() : nil,
+                mail: preferences.enableMailTools ? MailService() : nil)
             mcpServer = server
             Task.detached {
                 do {

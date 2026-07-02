@@ -9,8 +9,9 @@ import NIOCore
 import NIOHTTP1
 import NIOPosix
 
-/// A localhost MCP endpoint hosted inside Isle, so Codex can call Isle's reminder
-/// tools over Streamable HTTP (`[mcp_servers.reminders] url` in `CodexClient`).
+/// A localhost MCP endpoint hosted inside Isle, so Codex can call Isle's own tools
+/// (reminders and mail) over Streamable HTTP (`[mcp_servers.reminders] url` in
+/// `CodexClient` — one server fronts every provider).
 ///
 /// The MCP SDK's HTTP transport is framework-agnostic — it turns an `HTTPRequest`
 /// into an `HTTPResponse` but doesn't listen on a socket — so this wraps it in a
@@ -26,7 +27,8 @@ actor MCPHTTPServer {
     private let host = "127.0.0.1"
     private let port: Int
     private let endpoint = "/mcp"
-    private let tools: ReminderTools
+    private let reminderTools: ReminderTools?
+    private let mailTools: MailTools?
 
     private var group: MultiThreadedEventLoopGroup?
     private var channel: Channel?
@@ -34,9 +36,10 @@ actor MCPHTTPServer {
     /// its transport so its message-handling task keeps running.
     private var sessions: [String: (transport: StatefulHTTPServerTransport, server: Server)] = [:]
 
-    init(port: Int, service: RemindersService) {
+    init(port: Int, reminders: RemindersService?, mail: MailService?) {
         self.port = port
-        self.tools = ReminderTools(service: service)
+        self.reminderTools = reminders.map { ReminderTools(service: $0) }
+        self.mailTools = mail.map { MailTools(service: $0) }
     }
 
     var mcpEndpoint: String { endpoint }
@@ -117,16 +120,26 @@ actor MCPHTTPServer {
 
     private func makeServer() -> Server {
         let server = Server(
-            name: "isle-reminders",
+            name: "isle-tools",
             version: "1.0.0",
             capabilities: .init(tools: .init(listChanged: false)))
-        let tools = self.tools
+        let reminderTools = self.reminderTools
+        let mailTools = self.mailTools
         Task {
             await server.withMethodHandler(ListTools.self) { _ in
-                .init(tools: ReminderTools.tools)
+                var tools: [Tool] = []
+                if reminderTools != nil { tools += ReminderTools.tools }
+                if mailTools != nil { tools += MailTools.tools }
+                return .init(tools: tools)
             }
             await server.withMethodHandler(CallTool.self) { params in
-                await tools.call(name: params.name, arguments: params.arguments)
+                if let mailTools, MailTools.toolNames.contains(params.name) {
+                    return await mailTools.call(name: params.name, arguments: params.arguments)
+                }
+                if let reminderTools {
+                    return await reminderTools.call(name: params.name, arguments: params.arguments)
+                }
+                return .init(content: [.text(text: "Unknown tool: \(params.name)", annotations: nil, _meta: nil)], isError: true)
             }
         }
         return server

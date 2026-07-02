@@ -27,7 +27,7 @@ final class DictationManager {
         self.preferences = preferences
         self.codex = CodexClient(
             systemPrompt: preferences.systemPrompt, model: preferences.codexModel,
-            mcpReminderURL: preferences.enableReminderTools
+            mcpReminderURL: preferences.enableReminderTools || preferences.enableMailTools
                 ? "http://127.0.0.1:\(preferences.mcpPort)/mcp" : nil)
     }
 

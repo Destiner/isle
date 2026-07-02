@@ -68,6 +68,11 @@ struct Preferences {
     /// isolated `CODEX_HOME` config so `codex exec` can call it.
     var enableReminderTools: Bool = true
 
+    /// Expose Isle's mail tools (read/search/send via Mail.app over AppleScript) to
+    /// Codex on the same MCP server. First use prompts for Automation access to Mail,
+    /// attributed to Isle. `send_email` sends immediately — there is no confirmation.
+    var enableMailTools: Bool = true
+
     /// Port the in-process MCP server binds on `127.0.0.1`. Codex connects here.
     var mcpPort: Int = 8917
 
