@@ -42,12 +42,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Debug logging (no-op in Release; ISLE_LOG env var overrides the pref).
+        Log.configure(enabled: preferences.enableLogging)
+
         // Background agent: no Dock icon, no menu bar.
         NSApp.setActivationPolicy(.accessory)
 
         // Restore the last-used mode (falling back to the default on first launch).
         state.mode = UserDefaults.standard.string(forKey: Self.modeKey)
             .flatMap(InputMode.init(rawValue:)) ?? preferences.defaultMode
+        Log.app("launch", ["mode": state.mode.rawValue])
 
         let panel = PillPanel(
             rootView: PillView(
@@ -74,9 +78,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let server = MCPHTTPServer(port: preferences.mcpPort, service: RemindersService())
             mcpServer = server
             Task.detached {
-                do { try await server.start() }
-                catch { NSLog("Isle: MCP server failed to start: \(error)") }
+                do {
+                    try await server.start()
+                } catch {
+                    Log.error("mcp.start", "\(error)")
+                }
             }
+            Log.app("mcp.listening", ["port": preferences.mcpPort])
         }
 
         // Stream recognized speech into the pill as the user talks.
@@ -185,6 +193,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let next: InputMode = state.mode == .text ? .voice : .text
         state.mode = next
         UserDefaults.standard.set(next.rawValue, forKey: Self.modeKey)
+        Log.app("mode.switch", ["to": next.rawValue])
 
         state.startTurn()
         if next == .voice {
@@ -247,6 +256,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         idleTimer?.invalidate()
         idleTimer = Timer.scheduledTimer(withTimeInterval: preferences.idleTimeout, repeats: false) { [weak self] _ in
             guard let self else { return }
+            Log.app("idle.clear")
             self.dictation.clearHistory()
             self.state.reset()
         }

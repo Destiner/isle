@@ -79,7 +79,21 @@ nonisolated struct ReminderTools: Sendable {
 
     /// Routes a `tools/call` to the matching service method and packages the result.
     /// Any thrown error becomes an `isError` result carrying a readable message.
+    /// Every call is logged here — the single choke point for Codex's tool use.
     func call(name: String, arguments: [String: Value]?) async -> CallTool.Result {
+        let start = Date()
+        let result = await dispatch(name: name, arguments: arguments)
+        let chars = result.content.reduce(0) { acc, item in
+            if case let .text(text, _, _) = item { return acc + text.count }
+            return acc
+        }
+        Log.tool(name: name, arguments: arguments.map { "\($0)" } ?? "{}",
+                 isError: result.isError == true, resultChars: chars,
+                 durationMs: Int(Date().timeIntervalSince(start) * 1000))
+        return result
+    }
+
+    private func dispatch(name: String, arguments: [String: Value]?) async -> CallTool.Result {
         do {
             switch name {
             case "search_reminders":

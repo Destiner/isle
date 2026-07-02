@@ -105,6 +105,9 @@ struct CodexClient {
     /// Q&A snappy; see `Preferences`). Suspends until the CLI exits.
     func send(_ prompt: String, history: [Turn] = [], effort: String = "low") async throws -> String {
         let composed = composePrompt(latest: prompt, history: history)
+        Log.codexRequest(model: model, effort: effort, historyTurns: history.count, prompt: composed)
+        let start = Date()
+        func elapsedMs() -> Int { Int(Date().timeIntervalSince(start) * 1000) }
 
         let outURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("isle-codex-\(UUID().uuidString).txt")
@@ -158,22 +161,27 @@ struct CodexClient {
                 try? FileManager.default.removeItem(at: outURL)
 
                 guard proc.terminationStatus == 0 else {
-                    NSLog("Isle: codex exited \(proc.terminationStatus): \(stderr)")
-                    continuation.resume(throwing: CodexError.classify(
-                        exitCode: proc.terminationStatus, stderr: stderr))
+                    let classified = CodexError.classify(
+                        exitCode: proc.terminationStatus, stderr: stderr)
+                    Log.codexError("\(classified)", exitCode: proc.terminationStatus,
+                                   stderr: stderr, durationMs: elapsedMs())
+                    continuation.resume(throwing: classified)
                     return
                 }
                 guard let message, !message.isEmpty else {
+                    Log.codexError("emptyResponse", exitCode: proc.terminationStatus,
+                                   durationMs: elapsedMs())
                     continuation.resume(throwing: CodexError.emptyResponse)
                     return
                 }
+                Log.codexResponse(chars: message.count, durationMs: elapsedMs())
                 continuation.resume(returning: message)
             }
 
             do {
                 try process.run()
             } catch {
-                NSLog("Isle: couldn't launch codex: \(error)")
+                Log.codexError("launchFailed", stderr: "\(error)", durationMs: elapsedMs())
                 continuation.resume(throwing: CodexError.launchFailed)
                 return
             }

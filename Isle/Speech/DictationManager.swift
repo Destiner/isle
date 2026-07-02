@@ -85,8 +85,9 @@ final class DictationManager {
                 let manager = AsrManager(config: .default)
                 try await manager.loadModels(models)
                 asr = manager
+                Log.voice("asr.loaded")
             } catch {
-                NSLog("Isle: ASR model load failed: \(error)")
+                Log.error("asr.load", "\(error)")
             }
         }
     }
@@ -102,9 +103,10 @@ final class DictationManager {
         do {
             try recorder.start()
         } catch {
-            NSLog("Isle: failed to start recording: \(error)")
+            Log.error("recording.start", "\(error)")
             return
         }
+        Log.voice("recording.start", ["preview": preview])
         onPartialTranscript?("")
         if preview { startPartialLoop() }
         startEndpointLoop()
@@ -127,6 +129,7 @@ final class DictationManager {
 
         let samples = recorder.stop()
         guard let asr, !samples.isEmpty else {
+            Log.voice("capture.empty")
             onNoResponse?(nil)
             return
         }
@@ -137,21 +140,23 @@ final class DictationManager {
                 let result = try await asr.transcribe(samples, decoderState: &state)
                 let prompt = result.text.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !prompt.isEmpty else {
+                    Log.voice("capture.empty")
                     onNoResponse?(nil)
                     return
                 }
+                Log.turnUser(source: .voice, text: prompt)
                 onFinalTranscript?(prompt)
 
                 let answer = try await codex.send(
                     prompt, history: history, effort: preferences.reasoningEffort)
                 history.append(CodexClient.Turn(role: .user, text: prompt))
                 history.append(CodexClient.Turn(role: .assistant, text: answer))
+                Log.turnAssistant(text: answer)
                 onResponse?(answer)
             } catch let error as CodexClient.CodexError {
-                NSLog("Isle: codex request failed: \(error)")
                 onNoResponse?(error.localizedDescription)
             } catch {
-                NSLog("Isle: transcription failed: \(error)")
+                Log.error("transcribe", "\(error)")
                 onNoResponse?("Couldn't transcribe that")
             }
         }
@@ -169,18 +174,19 @@ final class DictationManager {
 
         Task {
             do {
+                Log.turnUser(source: .text, text: prompt)
                 onFinalTranscript?(prompt)
 
                 let answer = try await codex.send(
                     prompt, history: history, effort: preferences.reasoningEffort)
                 history.append(CodexClient.Turn(role: .user, text: prompt))
                 history.append(CodexClient.Turn(role: .assistant, text: answer))
+                Log.turnAssistant(text: answer)
                 onResponse?(answer)
             } catch let error as CodexClient.CodexError {
-                NSLog("Isle: codex request failed: \(error)")
                 onNoResponse?(error.localizedDescription)
             } catch {
-                NSLog("Isle: codex request failed: \(error)")
+                Log.error("submit", "\(error)")
                 onNoResponse?("Something went wrong")
             }
         }
@@ -200,6 +206,7 @@ final class DictationManager {
     /// Forgets the conversation so the next request starts a fresh context.
     func clearHistory() {
         history.removeAll()
+        Log.endConversation()
     }
 
     /// Periodically re-transcribes the whole accumulated buffer while recording,
@@ -241,12 +248,14 @@ final class DictationManager {
                     silence = 0
                     if !onsetFired, speech >= self.preferences.onsetSpeech {
                         onsetFired = true
+                        Log.voice("speech.onset")
                         self.onSpeechStart?()
                     }
                 } else if speech >= self.preferences.minSpeech {
                     silence += tick
                     if silence >= self.preferences.endpointSilence {
                         self.endpointTask = nil
+                        Log.voice("endpoint")
                         self.onEndpoint?()
                         return
                     }

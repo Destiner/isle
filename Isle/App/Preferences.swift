@@ -29,6 +29,12 @@ struct Preferences {
     /// the next open starts fresh.
     var idleTimeout: TimeInterval = 5 * 60
 
+    /// Write structured debug logs (Codex runs, tool calls, turns, voice) to
+    /// `~/Library/Application Support/Isle/logs/`. Debug builds only — the whole
+    /// logging path compiles out of Release. The `ISLE_LOG` env var (`0`/`1`)
+    /// overrides this per-launch. See `Log`.
+    var enableLogging: Bool = true
+
     // MARK: - Codex
 
     /// `model_reasoning_effort` passed to `codex exec`. Low keeps spoken Q&A
