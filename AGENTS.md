@@ -9,6 +9,7 @@ macOS menu-bar-less agent app. Tapping the fn / 🌐 key shows a Dynamic Island-
 - `xcodebuild -project Isle.xcodeproj -scheme Isle -configuration Debug -destination 'platform=macOS' build` - Build
 - `xcodebuild test -project Isle.xcodeproj -scheme Isle -destination 'platform=macOS'` - Run tests
 - `open $(xcodebuild -project Isle.xcodeproj -scheme Isle -configuration Debug -showBuildSettings | awk -F' = ' '/ BUILT_PRODUCTS_DIR /{d=$2}/ FULL_PRODUCT_NAME /{n=$2}END{print d"/"n}')` - Launch the built app
+- `./install.sh` - Build **Debug** and install to `/Applications/Isle.app` (quitting any running copy). Local installs are always the Debug build on purpose: `Log` compiles only into Debug, so this is the version that writes session logs to `~/Library/Application Support/Isle/logs/`. There is no logging Release build — Release ships without it.
 
 ## Testing
 
