@@ -70,6 +70,9 @@ struct Preferences {
         - Get straight to the point. Skip preamble, caveats, and restating the question.
         - You can act on this Mac when asked — open apps, files, or folders, run quick \
         commands — then confirm in a few words.
+        - To browse the web, use your browser tools (browser_navigate, browser_read, …) \
+        rather than shell commands; they drive a real Chrome. Call browser_show when a page \
+        needs the user — e.g. to sign in.
         """
 
     /// Hard cap on a single `codex exec` run. If Codex hasn't finished within this,
@@ -90,6 +93,24 @@ struct Preferences {
     /// Codex on the same MCP server. First use prompts for Automation access to Mail,
     /// attributed to Isle. `send_email` sends immediately — there is no confirmation.
     var enableMailTools: Bool = true
+
+    /// Expose Isle's browser tools (navigate/read/click/type/evaluate/screenshot) to
+    /// Codex on the same MCP server. Drives the user's installed Chrome over CDP — no
+    /// bundled browser — launching it lazily on first use against a dedicated,
+    /// persistent profile under Isle's Application Support (`chrome-profile`), so
+    /// automation logins survive across runs without touching everyday browsing.
+    var enableBrowserTools: Bool = true
+
+    /// Remote-debugging port Isle opens Chrome on (and attaches CDP to) on `127.0.0.1`.
+    var chromeDebuggingPort: Int = 9222
+
+    /// Launch the automation Chrome headless (`--headless=new`) — a real Chrome that
+    /// shares the same persistent profile (cookies/logins survive) but paints no
+    /// window, so it doesn't pop up on the user's screen. Caveat: a headless window
+    /// can't be signed into interactively, so auth-gated sites need one headed launch
+    /// (`chromeHeadless = false`) to establish the session first; headless then reuses
+    /// it. Public pages work headless immediately.
+    var chromeHeadless: Bool = true
 
     /// Port the in-process MCP server binds on `127.0.0.1`. Codex connects here.
     var mcpPort: Int = 8917

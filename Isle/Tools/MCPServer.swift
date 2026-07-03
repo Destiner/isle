@@ -29,6 +29,7 @@ actor MCPHTTPServer {
     private let endpoint = "/mcp"
     private let reminderTools: ReminderTools?
     private let mailTools: MailTools?
+    private let browserTools: BrowserTools?
 
     private var group: MultiThreadedEventLoopGroup?
     private var channel: Channel?
@@ -36,10 +37,11 @@ actor MCPHTTPServer {
     /// its transport so its message-handling task keeps running.
     private var sessions: [String: (transport: StatefulHTTPServerTransport, server: Server)] = [:]
 
-    init(port: Int, reminders: RemindersService?, mail: MailService?) {
+    init(port: Int, reminders: RemindersService?, mail: MailService?, browser: BrowserService?) {
         self.port = port
         self.reminderTools = reminders.map { ReminderTools(service: $0) }
         self.mailTools = mail.map { MailTools(service: $0) }
+        self.browserTools = browser.map { BrowserTools(service: $0) }
     }
 
     var mcpEndpoint: String { endpoint }
@@ -47,7 +49,14 @@ actor MCPHTTPServer {
     /// Binds the listener and serves until the channel closes (i.e. for the app's
     /// lifetime). Call from a detached task — this does not return under normal use.
     func start() async throws {
-        let group = MultiThreadedEventLoopGroup(numberOfThreads: 1)
+        // A pool, not a single loop: Codex's streamable-HTTP client opens several
+        // connections in quick succession during the handshake (initialize, the
+        // `notifications/initialized` POST, the long-lived GET SSE stream) and treats
+        // *any* connection failure as fatal — dropping every tool this server exposes.
+        // On one event loop those long-lived SSE streams starve the accept path, so a
+        // freshly-opened connection can intermittently be refused. A small pool keeps
+        // the acceptor loop free of per-connection work.
+        let group = MultiThreadedEventLoopGroup(numberOfThreads: max(2, System.coreCount))
         self.group = group
 
         let bootstrap = ServerBootstrap(group: group)
@@ -125,16 +134,21 @@ actor MCPHTTPServer {
             capabilities: .init(tools: .init(listChanged: false)))
         let reminderTools = self.reminderTools
         let mailTools = self.mailTools
+        let browserTools = self.browserTools
         Task {
             await server.withMethodHandler(ListTools.self) { _ in
                 var tools: [Tool] = []
                 if reminderTools != nil { tools += ReminderTools.tools }
                 if mailTools != nil { tools += MailTools.tools }
+                if browserTools != nil { tools += BrowserTools.tools }
                 return .init(tools: tools)
             }
             await server.withMethodHandler(CallTool.self) { params in
                 if let mailTools, MailTools.toolNames.contains(params.name) {
                     return await mailTools.call(name: params.name, arguments: params.arguments)
+                }
+                if let browserTools, BrowserTools.toolNames.contains(params.name) {
+                    return await browserTools.call(name: params.name, arguments: params.arguments)
                 }
                 if let reminderTools {
                     return await reminderTools.call(name: params.name, arguments: params.arguments)

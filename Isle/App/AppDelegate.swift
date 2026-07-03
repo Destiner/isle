@@ -74,11 +74,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Bring up the MCP tool server so Codex can act on Reminders and Mail. Runs
         // for the app's lifetime; `start()` serves until the process exits, so detach.
-        if preferences.enableReminderTools || preferences.enableMailTools {
+        if preferences.enableReminderTools || preferences.enableMailTools || preferences.enableBrowserTools {
             let server = MCPHTTPServer(
                 port: preferences.mcpPort,
                 reminders: preferences.enableReminderTools ? RemindersService() : nil,
-                mail: preferences.enableMailTools ? MailService() : nil)
+                mail: preferences.enableMailTools ? MailService() : nil,
+                browser: preferences.enableBrowserTools ? BrowserService(port: preferences.chromeDebuggingPort, headless: preferences.chromeHeadless) : nil)
             mcpServer = server
             Task.detached {
                 do {
