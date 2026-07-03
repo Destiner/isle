@@ -132,11 +132,13 @@ enum Log {
              ["chars": chars, "durationMs": durationMs])
     }
 
-    static func codexError(_ kind: String, exitCode: Int32? = nil, stderr: String? = nil, durationMs: Int) {
+    static func codexError(_ kind: String, exitCode: Int32? = nil, stderr: String? = nil,
+                           events: String? = nil, durationMs: Int) {
         guard isEnabled else { return }
         var fields: [String: Any] = ["kind": kind, "durationMs": durationMs]
         if let exitCode { fields["exitCode"] = Int(exitCode) }
         if let stderr, !stderr.isEmpty { fields["stderr"] = stderr }
+        if let events, !events.isEmpty { fields["events"] = events }
         emit(.conversation, cat: "codex", event: "error", level: .error, fields)
     }
 

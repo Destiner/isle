@@ -136,7 +136,7 @@ struct CodexClient {
             : "-s workspace-write -a never"
         process.arguments = [
             "-ilc",
-            "codex exec --skip-git-repo-check --ephemeral \(sandboxArgs) "
+            "codex exec --skip-git-repo-check --json \(sandboxArgs) "
                 + "--color never -c model=\"$ISLE_MODEL\" "
                 + "-c model_reasoning_effort=\"$ISLE_EFFORT\" "
                 + "-C \"$ISLE_WD\" -o \"$ISLE_OUT\" -",
@@ -156,7 +156,16 @@ struct CodexClient {
         let stderrPipe = Pipe()
         process.standardInput = stdinPipe
         process.standardError = stderrPipe
-        process.standardOutput = Pipe()  // discard the event log; we read `-o`
+        // Capture Codex's `--json` event log (stdout) to a file — not a Pipe, which
+        // would deadlock Codex once its ~64 KB buffer fills with nobody draining it.
+        // On failure the tail is folded into the error log so a stuck/failed run is
+        // diagnosable inline; a successful run's full trace lives in Codex's own
+        // session rollout under CODEX_HOME. The final message still comes from `-o`.
+        let eventsURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("isle-codex-events-\(UUID().uuidString).jsonl")
+        FileManager.default.createFile(atPath: eventsURL.path, contents: nil)
+        let eventsHandle = try? FileHandle(forWritingTo: eventsURL)
+        process.standardOutput = eventsHandle ?? FileHandle.nullDevice
 
         return try await withCheckedThrowingContinuation { continuation in
             process.terminationHandler = { proc in
@@ -168,17 +177,22 @@ struct CodexClient {
                     .trimmingCharacters(in: .whitespacesAndNewlines)
                 try? FileManager.default.removeItem(at: outURL)
 
+                try? eventsHandle?.close()
+                let events = String(
+                    ((try? String(contentsOf: eventsURL, encoding: .utf8)) ?? "").suffix(8000))
+                try? FileManager.default.removeItem(at: eventsURL)
+
                 guard proc.terminationStatus == 0 else {
                     let classified = CodexError.classify(
                         exitCode: proc.terminationStatus, stderr: stderr)
                     Log.codexError("\(classified)", exitCode: proc.terminationStatus,
-                                   stderr: stderr, durationMs: elapsedMs())
+                                   stderr: stderr, events: events, durationMs: elapsedMs())
                     continuation.resume(throwing: classified)
                     return
                 }
                 guard let message, !message.isEmpty else {
                     Log.codexError("emptyResponse", exitCode: proc.terminationStatus,
-                                   durationMs: elapsedMs())
+                                   events: events, durationMs: elapsedMs())
                     continuation.resume(throwing: CodexError.emptyResponse)
                     return
                 }
@@ -251,6 +265,24 @@ struct CodexClient {
         return kept.joined(separator: "\n")
     }
 
+    /// Deletes Codex session rollout files older than a week. Without `--ephemeral`
+    /// Codex persists a full per-run transcript under `CODEX_HOME/sessions/` — the
+    /// authoritative "what happened" trace — but nothing prunes it, so this bounds
+    /// the growth. Best-effort: a missing dir or unreadable entry is skipped.
+    private static func pruneSessions(in home: URL) {
+        let sessions = home.appendingPathComponent("sessions", isDirectory: true)
+        let cutoff = Date().addingTimeInterval(-7 * 24 * 60 * 60)
+        let keys: [URLResourceKey] = [.contentModificationDateKey, .isRegularFileKey]
+        guard let walker = FileManager.default.enumerator(
+            at: sessions, includingPropertiesForKeys: keys) else { return }
+        for case let url as URL in walker {
+            guard let vals = try? url.resourceValues(forKeys: Set(keys)),
+                  vals.isRegularFile == true,
+                  let modified = vals.contentModificationDate, modified < cutoff else { continue }
+            try? FileManager.default.removeItem(at: url)
+        }
+    }
+
     private func ensureCodexHome() throws -> URL {
         let fm = FileManager.default
         let home = try fm.url(
@@ -258,6 +290,7 @@ struct CodexClient {
             appropriateFor: nil, create: true)
             .appendingPathComponent("Isle/codex-home", isDirectory: true)
         try fm.createDirectory(at: home, withIntermediateDirectories: true)
+        Self.pruneSessions(in: home)
 
         let agents = home.appendingPathComponent("AGENTS.md")
         try systemPrompt.write(to: agents, atomically: true, encoding: .utf8)
