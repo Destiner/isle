@@ -29,7 +29,8 @@ final class DictationManager {
             systemPrompt: preferences.systemPrompt, model: preferences.codexModel,
             mcpReminderURL: preferences.enableReminderTools || preferences.enableMailTools
                 ? "http://127.0.0.1:\(preferences.mcpPort)/mcp" : nil,
-            computerAccess: preferences.computerAccess)
+            computerAccess: preferences.computerAccess,
+            timeout: preferences.codexTimeout)
     }
 
     /// The running conversation, passed back to Codex on each turn so it has the

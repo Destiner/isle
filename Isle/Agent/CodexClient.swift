@@ -42,6 +42,9 @@ struct CodexClient {
     /// `send`.
     var computerAccess: Bool = Preferences().computerAccess
 
+    /// Hard cap on a single run before Isle kills it. See `Preferences.codexTimeout`.
+    var timeout: TimeInterval = Preferences().codexTimeout
+
     /// One message in the running conversation, replayed to Codex for context.
     struct Turn {
         enum Role: String { case user = "User", assistant = "Assistant" }
@@ -60,6 +63,7 @@ struct CodexClient {
         case notAuthenticated     // needs `codex login`
         case modelUnavailable     // unknown/unsupported model
         case serviceUnavailable   // network down / OpenAI 5xx
+        case timedOut             // killed after exceeding the run timeout
         case failed               // an unrecognized non-zero exit
         case emptyResponse        // exited cleanly but wrote no message
 
@@ -71,6 +75,7 @@ struct CodexClient {
             case .notAuthenticated:   "Codex isn't signed in"
             case .modelUnavailable:   "Codex model unavailable"
             case .serviceUnavailable: "Can't reach Codex"
+            case .timedOut:           "Codex took too long"
             case .failed:             "Codex failed"
             case .emptyResponse:      "Codex had nothing to say"
             }
@@ -167,8 +172,19 @@ struct CodexClient {
         let eventsHandle = try? FileHandle(forWritingTo: eventsURL)
         process.standardOutput = eventsHandle ?? FileHandle.nullDevice
 
+        // Watchdog: Codex has no timeout of its own when the model's response stream
+        // stalls (bytes stop with no close), so it can hang forever. If the run
+        // outlasts `timeout`, kill the whole process tree; killing the shell Isle
+        // spawned then fires `terminationHandler`, which reports `.timedOut`. The
+        // flag is set before the kill so the handler sees it. Guarded because the
+        // handler and the watchdog run on different queues.
+        let timeoutLock = NSLock()
+        var didTimeout = false
+        var watchdog: DispatchWorkItem?
+
         return try await withCheckedThrowingContinuation { continuation in
             process.terminationHandler = { proc in
+                watchdog?.cancel()
                 let stderr = String(
                     data: stderrPipe.fileHandleForReading.readDataToEndOfFile(),
                     encoding: .utf8
@@ -181,6 +197,14 @@ struct CodexClient {
                 let events = String(
                     ((try? String(contentsOf: eventsURL, encoding: .utf8)) ?? "").suffix(8000))
                 try? FileManager.default.removeItem(at: eventsURL)
+
+                timeoutLock.lock(); let timedOut = didTimeout; timeoutLock.unlock()
+                if timedOut {
+                    Log.codexError("timedOut", exitCode: proc.terminationStatus,
+                                   stderr: stderr, events: events, durationMs: elapsedMs())
+                    continuation.resume(throwing: CodexError.timedOut)
+                    return
+                }
 
                 guard proc.terminationStatus == 0 else {
                     let classified = CodexError.classify(
@@ -207,6 +231,13 @@ struct CodexClient {
                 continuation.resume(throwing: CodexError.launchFailed)
                 return
             }
+
+            let item = DispatchWorkItem {
+                timeoutLock.lock(); didTimeout = true; timeoutLock.unlock()
+                Self.killProcessTree(process.processIdentifier)
+            }
+            watchdog = item
+            DispatchQueue.global().asyncAfter(deadline: .now() + timeout, execute: item)
 
             let handle = stdinPipe.fileHandleForWriting
             handle.write(Data(composed.utf8))
@@ -263,6 +294,32 @@ struct CodexClient {
             kept.append(line)
         }
         return kept.joined(separator: "\n")
+    }
+
+    /// SIGKILLs `pid` and every descendant, children first so nothing re-parents
+    /// away mid-sweep. The run is `zsh -> node -> codex`, and killing only the shell
+    /// Isle spawned would orphan the real `codex` process (leaving it holding the
+    /// stalled API connection), so the whole tree must go.
+    private static func killProcessTree(_ pid: pid_t) {
+        guard pid > 0 else { return }
+        for child in childPIDs(of: pid) { killProcessTree(child) }
+        kill(pid, SIGKILL)
+    }
+
+    /// Direct children of `parent`, via `pgrep -P`. Empty on any failure.
+    private static func childPIDs(of parent: pid_t) -> [pid_t] {
+        let pgrep = Process()
+        pgrep.executableURL = URL(fileURLWithPath: "/usr/bin/pgrep")
+        pgrep.arguments = ["-P", "\(parent)"]
+        let pipe = Pipe()
+        pgrep.standardOutput = pipe
+        pgrep.standardError = FileHandle.nullDevice
+        guard (try? pgrep.run()) != nil else { return [] }
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        pgrep.waitUntilExit()
+        return (String(data: data, encoding: .utf8) ?? "")
+            .split(whereSeparator: \.isNewline)
+            .compactMap { pid_t($0) }
     }
 
     /// Deletes Codex session rollout files older than a week. Without `--ephemeral`

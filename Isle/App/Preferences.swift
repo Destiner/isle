@@ -72,6 +72,13 @@ struct Preferences {
         commands — then confirm in a few words.
         """
 
+    /// Hard cap on a single `codex exec` run. If Codex hasn't finished within this,
+    /// Isle kills the process (and its children) and surfaces a timeout instead of
+    /// leaving the pill stuck on "thinking" forever — e.g. when the model's response
+    /// stream stalls with no data and no close, which fires no timeout on Codex's own
+    /// side. Generous on purpose: normal spoken Q&A finishes in seconds.
+    var codexTimeout: TimeInterval = 5 * 60
+
     // MARK: - Tools (MCP)
 
     /// Expose Isle's reminder tools to Codex over a localhost MCP server. When on,
