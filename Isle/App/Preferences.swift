@@ -47,6 +47,17 @@ struct Preferences {
     /// `~/.codex/config.toml`.
     var codexModel: String = "gpt-5.5"
 
+    /// Grant Codex general-purpose computer access: run its shell commands
+    /// unsandboxed with no approval prompts (`--dangerously-bypass-approvals-and-sandbox`),
+    /// so spoken requests can open apps, launch files, and drive the machine. When
+    /// off, Codex runs under a `workspace-write` seatbelt sandbox with approvals
+    /// disabled — it can still run commands and write to its scratch dir, but can't
+    /// send Apple Events to other apps (no controlling Music/Finder/etc.) or launch
+    /// apps via LaunchServices. Isle's own Mail/Reminders tools are unaffected either
+    /// way (they run in-process, not as sandboxed Codex subprocesses). Trade-off when
+    /// on: a misheard command runs with full access under Isle's identity.
+    var computerAccess: Bool = true
+
     /// Isle's system prompt. Written to the isolated `CODEX_HOME`'s `AGENTS.md`,
     /// it replaces the personal dev instructions Codex would otherwise load —
     /// tuned for short spoken answers rather than an agentic coding session.

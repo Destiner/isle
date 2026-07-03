@@ -37,6 +37,11 @@ struct CodexClient {
     /// can call Isle's reminder tools; when `nil`, any stale entry is removed.
     var mcpReminderURL: String? = nil
 
+    /// Whether Codex runs unsandboxed with full machine access. See
+    /// `Preferences.computerAccess` for the trade-off; picks the sandbox flags in
+    /// `send`.
+    var computerAccess: Bool = Preferences().computerAccess
+
     /// One message in the running conversation, replayed to Codex for context.
     struct Turn {
         enum Role: String { case user = "User", assistant = "Assistant" }
@@ -120,15 +125,18 @@ struct CodexClient {
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/zsh")
-        // `--dangerously-bypass-approvals-and-sandbox` runs the agent unsandboxed
-        // so spoken requests can actually act on the machine ("open my Downloads",
-        // launch apps, etc.). Under the default read-only sandbox those commands
-        // fail (file writes are "Operation not permitted"; `open` dies with
-        // `kLSExecutableIncorrectFormat` because Seatbelt blocks LaunchServices).
+        // With computer access on, `--dangerously-bypass-approvals-and-sandbox` runs
+        // the agent unsandboxed so spoken requests can act on the machine ("open my
+        // Downloads", launch apps, etc.). With it off, `-s workspace-write -a never`
+        // keeps shell/file access inside the scratch dir but seatbelt blocks Apple
+        // Events to other apps and LaunchServices — `-a never` because Isle is
+        // non-interactive and can't answer approval prompts. See `computerAccess`.
+        let sandboxArgs = computerAccess
+            ? "--dangerously-bypass-approvals-and-sandbox"
+            : "-s workspace-write -a never"
         process.arguments = [
             "-ilc",
-            "codex exec --skip-git-repo-check --ephemeral "
-                + "--dangerously-bypass-approvals-and-sandbox "
+            "codex exec --skip-git-repo-check --ephemeral \(sandboxArgs) "
                 + "--color never -c model=\"$ISLE_MODEL\" "
                 + "-c model_reasoning_effort=\"$ISLE_EFFORT\" "
                 + "-C \"$ISLE_WD\" -o \"$ISLE_OUT\" -",
