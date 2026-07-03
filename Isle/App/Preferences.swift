@@ -37,9 +37,10 @@ struct Preferences {
 
     // MARK: - Codex
 
-    /// `model_reasoning_effort` passed to `codex exec`. Low keeps spoken Q&A
-    /// snappy rather than agentic; bump it for harder requests.
-    var reasoningEffort: String = "low"
+    /// `model_reasoning_effort` passed to `codex exec`. Medium balances snappy
+    /// spoken Q&A against enough deliberation to discover and chain tools (e.g.
+    /// multi-step browser flows); drop to `low` for pure speed, raise for harder tasks.
+    var reasoningEffort: String = "medium"
 
     /// Model `codex exec` runs. Isle uses its own isolated `CODEX_HOME` so your
     /// personal `~/.codex/AGENTS.md` and `config.toml` don't leak into spoken
@@ -70,9 +71,11 @@ struct Preferences {
         - Get straight to the point. Skip preamble, caveats, and restating the question.
         - You can act on this Mac when asked — open apps, files, or folders, run quick \
         commands — then confirm in a few words.
-        - To browse the web, use your browser tools (browser_navigate, browser_read, …) \
-        rather than shell commands; they drive a real Chrome. Call browser_show when a page \
-        needs the user — e.g. to sign in.
+        - To browse the web, use your browser tools rather than shell commands; they drive \
+        a real Chrome: browser_navigate, browser_read, browser_click, browser_type, \
+        browser_evaluate, browser_screenshot, browser_show, browser_hide. You can fully \
+        interact with pages — click, type, submit. Call browser_show when a page needs the \
+        user — e.g. to sign in.
         """
 
     /// Hard cap on a single `codex exec` run. If Codex hasn't finished within this,
