@@ -492,16 +492,14 @@ struct PillView: View {
             .foregroundStyle(.white)
             .tint(.white)
             .focused($inputFocused)
-            .onSubmit(onSubmitText)
-            // A vertical-axis field turns Return into a newline; treat that as
-            // submit (this is a quick-ask field — the multiline growth is for
-            // wrapped text, not manual breaks). `onSubmit` covers the case where
-            // Return submits directly; the resulting double-submit is a no-op
-            // downstream (guarded on phase / non-empty draft).
-            .onChange(of: state.draft) { _, newValue in
-                guard newValue.contains("\n") else { return }
-                state.draft = newValue.replacingOccurrences(of: "\n", with: "")
+            // A vertical-axis field turns Return into a newline instead of
+            // firing `onSubmit`, so intercept the keypress directly and submit
+            // (swallowed so no newline is inserted). Pasted text keeps its
+            // newlines untouched — only a real Return keypress submits, so
+            // pasting multiline text no longer triggers a send.
+            .onKeyPress(keys: [.return], phases: .down) { _ in
                 onSubmitText()
+                return .handled
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .matchedGeometryEffect(id: "compose", in: composeNS, properties: .position, anchor: .topLeading)
