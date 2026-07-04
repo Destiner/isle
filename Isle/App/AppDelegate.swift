@@ -107,6 +107,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.state.showResponse(answer)
             self.armVoiceFollowUp()
         }
+        // Codex is calling a tool (web search, a shell command, an Isle MCP tool):
+        // show it in the pill's single tool slot; clear back to "Thinking" when it
+        // finishes (no next tool yet). A new answer clears it via showResponse.
+        dictation.onToolEvent = { [weak self] event in
+            guard let self else { return }
+            switch event {
+            case let .begin(_, key): self.state.beginTool(named: key)
+            case .end: self.state.endTool()
+            }
+        }
         // Voice only: the speaker fell quiet after talking — auto-submit, exactly
         // as if Enter had been pressed from listening. Manual Enter still works as
         // an instant override (`onSubmit`).
@@ -235,9 +245,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard state.isOpen, state.phase != .thinking else { return }
         let trimmed = state.draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        state.draft = ""
+        state.setUserMessage(trimmed)
         state.beginThinking()
         dictation.submitText(trimmed)
+        // Clear the field only after it's animated out, so the morph shows the
+        // text greying into place rather than flashing the placeholder mid-fade.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { [weak self] in
+            self?.state.draft = ""
+        }
     }
 
     private func hide() {

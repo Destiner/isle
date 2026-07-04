@@ -71,6 +71,20 @@ final class IslandState: ObservableObject {
     /// reads "Error" (red) instead of "Ready" (green). Otherwise an error turn
     /// behaves like any response (stays on screen; voice re-arms for a retry).
     @Published private(set) var isError = false
+    /// Tool/MCP calls surfaced while Codex works (icon + label). Populated during
+    /// `.thinking` and cleared at every turn boundary (folded into
+    /// `clearTranscript`). The data path from `CodexClient`'s `--json` event log
+    /// isn't wired yet — today this is driven directly (see the gallery).
+    /// The tool/MCP call currently running — a single slot, so a new call
+    /// replaces (and rolls over) the prior one rather than stacking. Nil when
+    /// nothing's running, so the pill falls back to the plain "Thinking" row.
+    /// Cleared at every turn boundary (folded into `clearTranscript`).
+    @Published private(set) var currentTool: ToolActivity?
+    /// The message the user just submitted, shown while the model is thinking so
+    /// it's clear what's being answered. Voice has the live transcript for this;
+    /// text throws the draft away on submit, so we keep it here. Cleared at every
+    /// turn boundary (folded into `clearTranscript`).
+    @Published private(set) var userMessage: String = ""
 
     /// Wrap width (pill width minus padding); set by the view once laid out.
     var availableTextWidth: CGFloat = 344
@@ -80,6 +94,7 @@ final class IslandState: ObservableObject {
     private var currentLineWidth: CGFloat = 0
     private var staging = false
     private var turnCounter = 0
+    private var toolCounter = 0
 
     var hasTranscript: Bool { !words.isEmpty }
     var hasHistory: Bool { !assistantTurns.isEmpty }
@@ -186,6 +201,34 @@ final class IslandState: ObservableObject {
         pending = []
         currentLineWidth = 0
         staging = false
+        // Every clearTranscript site is a turn boundary (new turn / answer / close),
+        // so the running tool and the pending user message — both transient to the
+        // turn that spawned them — reset here too.
+        currentTool = nil
+        userMessage = ""
+    }
+
+    /// Record the message the user just sent so it stays on screen while the
+    /// model thinks. Set after the draft is cleared, before `beginThinking`.
+    func setUserMessage(_ text: String) {
+        userMessage = text
+    }
+
+    /// Surface a running tool step. `named:` resolves the icon + label via
+    /// `ToolPresentation`; the raw overload is for one-off/custom steps.
+    func beginTool(named name: String) {
+        let p = ToolPresentation.activity(forTool: name)
+        beginTool(icon: p.icon, label: p.label)
+    }
+
+    func beginTool(icon: String, label: String) {
+        toolCounter += 1
+        currentTool = ToolActivity(id: toolCounter, icon: icon, label: label)
+    }
+
+    /// The tool finished with nothing else running → back to the plain "Thinking".
+    func endTool() {
+        currentTool = nil
     }
 
     /// Append-only reconciliation: the live preview only grows with genuinely
@@ -277,6 +320,9 @@ struct PillView: View {
     var onQuit: () -> Void
 
     @FocusState private var inputFocused: Bool
+    /// Ties the text composer and the greyed submitted-message together so the
+    /// draft appears to grey out and slide into place rather than pop.
+    @Namespace private var composeNS
 
     private let textPadding: CGFloat = 18
 
@@ -284,6 +330,25 @@ struct PillView: View {
     /// once Codex answers it's dropped in favor of the response.
     private var showsUserMessage: Bool {
         state.hasTranscript && state.phase != .responding
+    }
+
+    /// Text mode has no live transcript, so the just-sent message is shown from
+    /// `state.userMessage` while the model is thinking.
+    private var showsUserText: Bool {
+        !state.userMessage.isEmpty && !state.hasTranscript && state.phase != .responding
+    }
+
+    /// Voice surfaces a "Listening" status row whenever the mic is live or armed:
+    /// while capturing (`.listening`) and while an answer is shown (`.responding`,
+    /// where the follow-up mic is armed so you can just speak again).
+    private var showsListening: Bool {
+        state.mode == .voice && (state.phase == .listening || state.phase == .responding)
+    }
+
+    /// The listening row is centered only when it's the sole content (the idle,
+    /// pre-speech voice pill). Otherwise it sits bottom-left under whatever's there.
+    private var listeningCentered: Bool {
+        state.phase == .listening && !state.hasTranscript && visibleTurns.isEmpty
     }
 
     /// In text mode the input field is present whenever the pill is open and
@@ -302,9 +367,10 @@ struct PillView: View {
     }
 
     /// The pill grows into a card whenever there's content to show — a live
-    /// transcript or any answer.
+    /// transcript, any answer, or running tool steps.
     private var expanded: Bool {
-        showsUserMessage || !visibleTurns.isEmpty || showsInput
+        showsUserMessage || showsUserText || !visibleTurns.isEmpty || showsInput
+            || state.currentTool != nil || state.phase == .thinking
     }
 
     var body: some View {
@@ -319,6 +385,10 @@ struct PillView: View {
             .animation(.spring(response: 0.38, dampingFraction: 0.82), value: state.words.count)
             .animation(.spring(response: 0.4, dampingFraction: 0.85), value: state.phase)
             .animation(.spring(response: 0.4, dampingFraction: 0.85), value: state.assistantTurns.count)
+            .animation(.spring(response: 0.4, dampingFraction: 0.85), value: state.currentTool?.id)
+            .animation(.spring(response: 0.4, dampingFraction: 0.85), value: state.mode)
+            // Grow/shrink the multiline field smoothly as lines are added/removed.
+            .animation(.spring(response: 0.28, dampingFraction: 0.9), value: state.draft)
             .onAppear { state.availableTextWidth = expandedWidth - 2 * textPadding }
             // Grab the caret whenever the input field is on screen so the user can
             // just start typing the moment the pill opens (or after an answer).
@@ -340,15 +410,8 @@ struct PillView: View {
         // Center-aligned so the status indicator stays centered as the pill
         // widens; the transcript/answers keep their own full-width leading frame.
         VStack(alignment: .center, spacing: 10) {
-            StatusIndicator(phase: state.phase, isError: state.isError, mode: state.mode, active: state.isOpen)
-
-            ForEach(visibleTurns) { turn in
-                ResponseBubble(text: turn.text, active: turn.id == state.activeTurnID)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    // Fade + collapse upward when the new user message displaces it.
-                    .transition(.opacity.combined(with: .scale(scale: 0.92, anchor: .top)))
-            }
-
+            // What the user said: the live transcript (voice) or the typed message
+            // (text), shown while capturing / thinking.
             if showsUserMessage {
                 TranscriptText(
                     words: state.words,
@@ -358,8 +421,56 @@ struct PillView: View {
                 .transition(.opacity)
             }
 
+            if showsUserText {
+                Text(state.userMessage)
+                    .font(.system(size: TranscriptMetrics.fontSize, weight: .regular, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.5))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .matchedGeometryEffect(id: "compose", in: composeNS, properties: .position, anchor: .topLeading)
+                    .transition(.opacity)
+            }
+
+            // The answer (active, or collapsed context once a new turn begins).
+            ForEach(visibleTurns) { turn in
+                ResponseBubble(text: turn.text, active: turn.id == state.activeTurnID, isError: state.isError)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    // Fade + collapse upward when the new user message displaces it.
+                    .transition(.opacity.combined(with: .scale(scale: 0.92, anchor: .top)))
+            }
+
+            // Text composer — extra breathing room when it trails an answer.
             if showsInput {
                 inputField
+                    .padding(.top, visibleTurns.isEmpty ? 0 : 10)
+            }
+
+            // Bottom-left status affordance: tool steps while thinking, else the
+            // phase row (Thinking / Listening).
+            if let tool = state.currentTool {
+                // Single slot: switching tools rolls the old out / new in.
+                ToolActivityRow(activity: tool)
+                    .id(tool.id)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .transition(.push(from: .bottom))
+            } else if state.phase == .thinking {
+                StatusRow(icon: "ellipsis", label: "Thinking", animating: state.isOpen)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .transition(.opacity)
+            } else if showsListening {
+                // Animate only while actively capturing (`.listening`). While the
+                // mic is merely armed (`.responding`) or the pill is closed, keep it
+                // static — the continuous symbol animation otherwise pegs the main
+                // thread and starves the (main-actor) speech-onset loop.
+                let live = state.isOpen && state.phase == .listening
+                if listeningCentered {
+                    // Idle (pre-speech): centered on its own in the compact pill.
+                    StatusRow(icon: "waveform", label: "Listening", animating: live)
+                        .transition(.opacity)
+                } else {
+                    StatusRow(icon: "waveform", label: "Listening", animating: live)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .transition(.opacity)
+                }
             }
         }
         .padding(.horizontal, textPadding)
@@ -373,14 +484,27 @@ struct PillView: View {
     /// so it blends into the pill. Enter sends; the caret is grabbed on open via
     /// `syncFocus()`.
     private var inputField: some View {
-        TextField("Ask anything…", text: $state.draft)
+        // Grows with the text, capped at 5 lines (then scrolls internally).
+        TextField("Ask anything…", text: $state.draft, axis: .vertical)
+            .lineLimit(1...5)
             .textFieldStyle(.plain)
             .font(.system(size: TranscriptMetrics.fontSize, weight: .regular, design: .rounded))
             .foregroundStyle(.white)
             .tint(.white)
             .focused($inputFocused)
             .onSubmit(onSubmitText)
+            // A vertical-axis field turns Return into a newline; treat that as
+            // submit (this is a quick-ask field — the multiline growth is for
+            // wrapped text, not manual breaks). `onSubmit` covers the case where
+            // Return submits directly; the resulting double-submit is a no-op
+            // downstream (guarded on phase / non-empty draft).
+            .onChange(of: state.draft) { _, newValue in
+                guard newValue.contains("\n") else { return }
+                state.draft = newValue.replacingOccurrences(of: "\n", with: "")
+                onSubmitText()
+            }
             .frame(maxWidth: .infinity, alignment: .leading)
+            .matchedGeometryEffect(id: "compose", in: composeNS, properties: .position, anchor: .topLeading)
             .transition(.opacity)
     }
 }
@@ -391,9 +515,13 @@ struct PillView: View {
 private struct ResponseBubble: View {
     var text: String
     var active: Bool
+    /// The turn is a failure notice: rendered as plain red-ish text (errors are
+    /// short and aren't markdown), no header needed to flag it.
+    var isError: Bool = false
 
     @State private var contentHeight: CGFloat = 0
     private let maxHeight: CGFloat = 340
+    private static let errorColor = Color(red: 0.98, green: 0.44, blue: 0.44)
 
     /// Flatten markdown to readable plain text for the collapsed two-line context
     /// line — drops fenced code blocks and strips the common inline/block markers
@@ -431,7 +559,21 @@ private struct ResponseBubble: View {
     var body: some View {
         ScrollView {
             Group {
-                if active {
+                if isError {
+                    // Failure notice: a warning triangle + plain red-ish text
+                    // (errors are short and aren't markdown), no header needed.
+                    HStack(alignment: .top, spacing: 8) {
+                        Image(systemName: "exclamationmark.triangle")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(Self.errorColor)
+                            .padding(.top, 1)
+                        Text(text)
+                            .font(.system(size: 14, weight: .regular, design: .rounded))
+                            .foregroundStyle(Self.errorColor)
+                            .textSelection(.enabled)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                } else if active {
                     // Full answer: render Codex's markdown (bold, code, lists, …).
                     MarkdownText(markdown: text)
                 } else {
@@ -591,88 +733,6 @@ private struct TranscriptText: View {
     }
 }
 
-/// A pulsing dot + label conveying the current phase: teal "Listening" while
-/// capturing speech, amber "Thinking" while waiting on Codex. The dot gently
-/// breathes while a soft ring pings outward — subtle, not blinky.
-private struct StatusIndicator: View {
-    var phase: IslandPhase
-    /// Overrides the phase colors/label with a red "Error" when the shown
-    /// response is a failure notice.
-    var isError: Bool
-    var mode: InputMode
-    /// Only animates while the island is open.
-    var active: Bool
-
-    /// One ping cycle, in seconds.
-    private let pingPeriod: TimeInterval = 1.5
-
-    private var tint: Color {
-        if isError { return Color(red: 0.95, green: 0.36, blue: 0.38) }  // red
-        switch phase {
-        case .listening: return Color(red: 0.20, green: 0.80, blue: 0.80)  // teal
-        case .thinking: return Color(red: 0.95, green: 0.72, blue: 0.30)   // amber
-        case .responding: return Color(red: 0.30, green: 0.82, blue: 0.46) // green
-        }
-    }
-
-    private var label: String {
-        if isError { return "Error" }
-        switch phase {
-        case .listening: return mode == .text ? "Ask" : "Listening"
-        case .thinking: return "Thinking"
-        case .responding: return "Ready"
-        }
-    }
-
-    /// In voice mode the dot pulses while listening or thinking. In text mode
-    /// there's no live capture, so the input phase ("Ask") stays steady and only
-    /// thinking pulses.
-    private var shouldPulse: Bool {
-        switch mode {
-        case .voice: active && phase != .responding
-        case .text: active && phase == .thinking
-        }
-    }
-
-    var body: some View {
-        HStack(spacing: 11) {
-            ZStack {
-                // A ring that expands outward from the core and fades. Driven by
-                // wall-clock time via TimelineView rather than a repeatForever
-                // animation, which SwiftUI restarts on unrelated re-renders and
-                // makes the dot blink. The schedule pauses when there's nothing
-                // to pulse so it costs nothing at rest.
-                TimelineView(.animation(paused: !shouldPulse)) { context in
-                    let t = pingProgress(at: context.date)
-                    Circle()
-                        .fill(tint)
-                        .frame(width: 9, height: 9)
-                        .scaleEffect(1 + 1.3 * t)
-                        .opacity(shouldPulse ? 0.5 * (1 - t) : 0)
-                }
-                // Core dot — constant.
-                Circle()
-                    .fill(tint)
-                    .frame(width: 8, height: 8)
-            }
-            .frame(width: 9, height: 9)
-            .shadow(color: tint.opacity(0.7), radius: 5)
-
-            Text(label)
-                .font(.system(size: 13, weight: .medium, design: .rounded))
-                .foregroundStyle(.white.opacity(0.92))
-        }
-        .animation(.easeInOut(duration: 0.25), value: phase)
-    }
-
-    /// Eased 0→1 sawtooth over `pingPeriod`, keyed off absolute time so the
-    /// cycle is continuous and never restarts when the view re-renders.
-    private func pingProgress(at date: Date) -> CGFloat {
-        let phase = date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: pingPeriod) / pingPeriod
-        let t = CGFloat(phase)
-        return t * (2 - t)  // ease-out
-    }
-}
 
 #Preview {
     let state = IslandState()

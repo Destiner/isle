@@ -51,6 +51,10 @@ final class DictationManager {
     /// The string is nil for an empty capture and an error message otherwise.
     var onNoResponse: ((String?) -> Void)?
 
+    /// Fired as Codex starts/finishes tool calls during a turn, so the pill can
+    /// show the active tool. Delivered on the main actor.
+    var onToolEvent: ((CodexClient.ToolEvent) -> Void)?
+
     /// Fired when the speaker has gone quiet after talking — the cue to submit
     /// the clip automatically. Wired to the same path as Enter from listening.
     var onEndpoint: (() -> Void)?
@@ -150,7 +154,10 @@ final class DictationManager {
                 onFinalTranscript?(prompt)
 
                 let answer = try await codex.send(
-                    prompt, history: history, effort: preferences.reasoningEffort)
+                    prompt, history: history, effort: preferences.reasoningEffort,
+                    onTool: { [weak self] event in
+                        Task { @MainActor in self?.onToolEvent?(event) }
+                    })
                 history.append(CodexClient.Turn(role: .user, text: prompt))
                 history.append(CodexClient.Turn(role: .assistant, text: answer))
                 Log.turnAssistant(text: answer)
@@ -180,7 +187,10 @@ final class DictationManager {
                 onFinalTranscript?(prompt)
 
                 let answer = try await codex.send(
-                    prompt, history: history, effort: preferences.reasoningEffort)
+                    prompt, history: history, effort: preferences.reasoningEffort,
+                    onTool: { [weak self] event in
+                        Task { @MainActor in self?.onToolEvent?(event) }
+                    })
                 history.append(CodexClient.Turn(role: .user, text: prompt))
                 history.append(CodexClient.Turn(role: .assistant, text: answer))
                 Log.turnAssistant(text: answer)

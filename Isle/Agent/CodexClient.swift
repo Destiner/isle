@@ -52,6 +52,43 @@ struct CodexClient {
         let text: String
     }
 
+    /// A tool call surfaced live from Codex's `--json` stream, to drive the pill's
+    /// tool row. `key` resolves to a label + icon via `ToolPresentation`.
+    enum ToolEvent {
+        case begin(id: String, key: String)
+        case end(id: String)
+    }
+
+    /// Codex emits `item.started` / `item.completed` for each step (tool call,
+    /// reasoning, agent message). We surface only the tool-ish items. `key` is the
+    /// codex item type (`web_search` / `command_execution` / …) or, for MCP calls,
+    /// the tool name — both mapped to a label by `ToolPresentation`.
+    private static func parseToolEvent(_ line: String) -> ToolEvent? {
+        guard let data = line.data(using: .utf8),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let type = obj["type"] as? String,
+              let item = obj["item"] as? [String: Any],
+              let id = item["id"] as? String,
+              let key = toolKey(for: item) else { return nil }
+        switch type {
+        case "item.started": return .begin(id: id, key: key)
+        case "item.completed": return .end(id: id)
+        default: return nil
+        }
+    }
+
+    private static func toolKey(for item: [String: Any]) -> String? {
+        guard let type = item["type"] as? String else { return nil }
+        switch type {
+        case "web_search", "command_execution", "file_change":
+            return type
+        case "mcp_tool_call":
+            return (item["tool"] as? String) ?? (item["name"] as? String) ?? "mcp_tool_call"
+        default:
+            return nil   // reasoning, agent_message, todo_list, error, …
+        }
+    }
+
     /// A failed Codex run, mapped to a short, human-readable line for the pill.
     /// The raw stderr is logged (not shown) — these are display strings, so the
     /// full banner never reaches the user. `classify(exitCode:stderr:)` picks the
@@ -113,7 +150,8 @@ struct CodexClient {
     /// is one-shot per process, so we carry context ourselves rather than
     /// resuming a session. `effort` is `model_reasoning_effort` (low keeps spoken
     /// Q&A snappy; see `Preferences`). Suspends until the CLI exits.
-    func send(_ prompt: String, history: [Turn] = [], effort: String = "low") async throws -> String {
+    func send(_ prompt: String, history: [Turn] = [], effort: String = "low",
+              onTool: @escaping (ToolEvent) -> Void = { _ in }) async throws -> String {
         let composed = composePrompt(latest: prompt, history: history)
         Log.codexRequest(model: model, effort: effort, historyTurns: history.count, prompt: composed)
         let start = Date()
@@ -161,16 +199,27 @@ struct CodexClient {
         let stderrPipe = Pipe()
         process.standardInput = stdinPipe
         process.standardError = stderrPipe
-        // Capture Codex's `--json` event log (stdout) to a file — not a Pipe, which
-        // would deadlock Codex once its ~64 KB buffer fills with nobody draining it.
-        // On failure the tail is folded into the error log so a stuck/failed run is
-        // diagnosable inline; a successful run's full trace lives in Codex's own
-        // session rollout under CODEX_HOME. The final message still comes from `-o`.
-        let eventsURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("isle-codex-events-\(UUID().uuidString).jsonl")
-        FileManager.default.createFile(atPath: eventsURL.path, contents: nil)
-        let eventsHandle = try? FileHandle(forWritingTo: eventsURL)
-        process.standardOutput = eventsHandle ?? FileHandle.nullDevice
+        // Stream Codex's `--json` event log (stdout) live: a readability handler
+        // drains the pipe continuously (so it never deadlocks once its ~64 KB
+        // buffer fills), splits it into JSONL lines, and surfaces tool-call begin/
+        // end items to the pill via `onTool`. A bounded rolling tail is kept for
+        // the error log. The final message still comes from `-o`, not this stream.
+        let outputPipe = Pipe()
+        process.standardOutput = outputPipe
+        let stream = EventStream { line in
+            if let event = Self.parseToolEvent(line) { onTool(event) }
+        }
+        outputPipe.fileHandleForReading.readabilityHandler = { handle in
+            let data = handle.availableData
+            if data.isEmpty {
+                // EOF: tear the source down so it doesn't busy-spin firing on the
+                // closed pipe (a FileHandle quirk that pegs a core and starves the
+                // audio/endpoint timing — which killed the voice follow-up turn).
+                handle.readabilityHandler = nil
+                return
+            }
+            stream.ingest(data)
+        }
 
         // Watchdog: Codex has no timeout of its own when the model's response stream
         // stalls (bytes stop with no close), so it can hang forever. If the run
@@ -193,10 +242,13 @@ struct CodexClient {
                     .trimmingCharacters(in: .whitespacesAndNewlines)
                 try? FileManager.default.removeItem(at: outURL)
 
-                try? eventsHandle?.close()
-                let events = String(
-                    ((try? String(contentsOf: eventsURL, encoding: .utf8)) ?? "").suffix(8000))
-                try? FileManager.default.removeItem(at: eventsURL)
+                // The readability handler has already drained the stream, so just
+                // tear it down and use what it accumulated. Do NOT readDataToEndOfFile
+                // here: the parent's write end may still be open, so that read can
+                // block indefinitely — hanging the turn at "Thinking" and (in voice)
+                // never re-arming the follow-up mic.
+                outputPipe.fileHandleForReading.readabilityHandler = nil
+                let events = stream.snapshotTail()
 
                 timeoutLock.lock(); let timedOut = didTimeout; timeoutLock.unlock()
                 if timedOut {
@@ -226,6 +278,10 @@ struct CodexClient {
 
             do {
                 try process.run()
+                // Close the parent's copy of the stdout write end so the read end
+                // sees EOF when the child exits (the child inherited its own copy at
+                // spawn). Without this the reader can hang and FDs leak per turn.
+                try? outputPipe.fileHandleForWriting.close()
             } catch {
                 Log.codexError("launchFailed", stderr: "\(error)", durationMs: elapsedMs())
                 continuation.resume(throwing: CodexError.launchFailed)
@@ -379,5 +435,42 @@ struct CodexClient {
             try fm.createSymbolicLink(at: link, withDestinationURL: realAuth)
         }
         return home
+    }
+}
+
+/// Drains a `--json` stdout pipe: buffers partial reads into complete lines
+/// (each handed to `onLine`) and keeps a bounded rolling tail for the error log.
+/// Lock-guarded because the pipe's readability handler and the process
+/// termination handler can both feed it from different queues.
+private final class EventStream {
+    private let lock = NSLock()
+    private var pending = Data()
+    private var tail = ""
+    private let onLine: (String) -> Void
+
+    init(onLine: @escaping (String) -> Void) { self.onLine = onLine }
+
+    func ingest(_ data: Data) {
+        lock.lock()
+        pending.append(data)
+        if let s = String(data: data, encoding: .utf8) {
+            tail += s
+            if tail.count > 8000 { tail = String(tail.suffix(8000)) }
+        }
+        var lines: [String] = []
+        while let nl = pending.firstIndex(of: 0x0A) {
+            let lineData = pending.subdata(in: pending.startIndex..<nl)
+            pending.removeSubrange(pending.startIndex...nl)
+            if let line = String(data: lineData, encoding: .utf8), !line.isEmpty {
+                lines.append(line)
+            }
+        }
+        lock.unlock()
+        for line in lines { onLine(line) }
+    }
+
+    func snapshotTail() -> String {
+        lock.lock(); defer { lock.unlock() }
+        return tail
     }
 }
