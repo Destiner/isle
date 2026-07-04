@@ -184,7 +184,11 @@ final class DictationManager {
         Task {
             do {
                 Log.turnUser(source: .text, text: prompt)
-                onFinalTranscript?(prompt)
+                // Unlike voice, text mode deliberately skips `onFinalTranscript`:
+                // it drives the voice teleprompter (`TranscriptText`), which can't
+                // wrap a long unbreakable token (e.g. a pasted URL) and overflows
+                // the pill. The message already shows via the wrapping echo
+                // (`IslandState.userMessage` / `showsUserText`).
 
                 let answer = try await codex.send(
                     prompt, history: history, effort: preferences.reasoningEffort,

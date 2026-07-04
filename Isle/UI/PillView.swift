@@ -362,7 +362,11 @@ struct PillView: View {
     /// answer as collapsed grey context — but only until the new message starts
     /// arriving, at which point it animates away.
     private var visibleTurns: [AssistantTurn] {
-        if state.phase != .responding && state.hasTranscript { return [] }
+        // Hide the prior answer the moment a new user message is on screen (voice
+        // transcript or text echo) — otherwise the prior response lingers behind
+        // the new message while thinking. (Was keyed on `hasTranscript`, but text
+        // mode no longer populates it, so use the message-shown conditions.)
+        if showsUserMessage || showsUserText { return [] }
         return Array(state.assistantTurns.suffix(1))
     }
 
