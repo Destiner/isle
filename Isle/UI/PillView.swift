@@ -426,7 +426,7 @@ struct PillView: View {
             }
 
             if showsUserText {
-                Text(state.userMessage)
+                Text(verbatim: state.userMessage)
                     .font(.system(size: TranscriptMetrics.fontSize, weight: .regular, design: .rounded))
                     .foregroundStyle(.white.opacity(0.5))
                     .frame(maxWidth: .infinity, alignment: .leading)
