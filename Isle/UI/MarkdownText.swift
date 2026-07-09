@@ -18,8 +18,23 @@ import SwiftUI
 struct MarkdownText: View {
     let markdown: String
     var textColor: Color = .white
+    var tableStyle: TableStyle = .default
 
     private static let baseFont = Font.system(size: 14, weight: .regular, design: .rounded)
+
+    struct TableStyle {
+        var cornerRadius: CGFloat = 6
+        var borderOpacity: Double = 0.17
+        var dividerOpacity: Double = 0.10
+        var headerBackgroundOpacity: Double = 0.10
+        var headerTextOpacity: Double = 0.65
+        var headerFontSize: CGFloat = 12
+        var cellMinWidth: CGFloat = 86
+        var cellHorizontalPadding: CGFloat = 8
+        var cellVerticalPadding: CGFloat = 6
+
+        static let `default` = Self()
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -51,6 +66,9 @@ struct MarkdownText: View {
 
         case .numberedList(let items):
             listView(items.map { ("\($0.number).", $0.content) })
+
+        case .table(let table):
+            tableView(table)
 
         case .codeBlock(let code):
             codeBlockView(code)
@@ -104,6 +122,82 @@ struct MarkdownText: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    private func tableView(_ table: MarkdownBlock.Table) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            Grid(alignment: .leading, horizontalSpacing: 0, verticalSpacing: 0) {
+                tableRow(
+                    table.header,
+                    alignments: table.alignments,
+                    isHeader: true,
+                    isLastRow: table.rows.isEmpty
+                )
+                ForEach(Array(table.rows.enumerated()), id: \.offset) { index, row in
+                    tableRow(
+                        row,
+                        alignments: table.alignments,
+                        isHeader: false,
+                        isLastRow: index == table.rows.count - 1
+                    )
+                }
+            }
+            .background(textColor.opacity(0.06))
+            .clipShape(RoundedRectangle(cornerRadius: tableStyle.cornerRadius, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: tableStyle.cornerRadius, style: .continuous)
+                    .stroke(textColor.opacity(tableStyle.borderOpacity), lineWidth: 1)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func tableRow(
+        _ cells: [AttributedString],
+        alignments: [MarkdownBlock.TableAlignment],
+        isHeader: Bool,
+        isLastRow: Bool
+    ) -> some View {
+        GridRow {
+            ForEach(Array(cells.enumerated()), id: \.offset) { index, cell in
+                Text(cell)
+                    .font(isHeader
+                        ? .system(size: tableStyle.headerFontSize, weight: .regular, design: .rounded)
+                        : Self.baseFont)
+                    .foregroundStyle(isHeader ? textColor.opacity(tableStyle.headerTextOpacity) : textColor)
+                    .multilineTextAlignment(textAlignment(alignments[index]))
+                    .frame(minWidth: tableStyle.cellMinWidth, maxWidth: .infinity, alignment: frameAlignment(alignments[index]))
+                    .padding(.horizontal, tableStyle.cellHorizontalPadding)
+                    .padding(.vertical, tableStyle.cellVerticalPadding)
+                    .background(isHeader ? textColor.opacity(tableStyle.headerBackgroundOpacity) : .clear)
+                    .overlay(alignment: .trailing) {
+                        if index < cells.count - 1 {
+                            Rectangle().fill(textColor.opacity(tableStyle.dividerOpacity)).frame(width: 1)
+                        }
+                    }
+                    .overlay(alignment: .bottom) {
+                        if !isLastRow {
+                            Rectangle().fill(textColor.opacity(tableStyle.dividerOpacity)).frame(height: 1)
+                        }
+                    }
+            }
+        }
+    }
+
+    private func textAlignment(_ alignment: MarkdownBlock.TableAlignment) -> TextAlignment {
+        switch alignment {
+        case .left: .leading
+        case .center: .center
+        case .right: .trailing
+        }
+    }
+
+    private func frameAlignment(_ alignment: MarkdownBlock.TableAlignment) -> Alignment {
+        switch alignment {
+        case .left: .leading
+        case .center: .center
+        case .right: .trailing
+        }
+    }
+
     private func headingSize(_ level: Int) -> CGFloat {
         switch level {
         case 1: 19
@@ -124,11 +218,24 @@ struct MarkdownBlock: Identifiable {
         let content: AttributedString
     }
 
+    enum TableAlignment: Equatable {
+        case left
+        case center
+        case right
+    }
+
+    struct Table {
+        let header: [AttributedString]
+        let alignments: [TableAlignment]
+        let rows: [[AttributedString]]
+    }
+
     enum Kind {
         case heading(level: Int, AttributedString)
         case paragraph(AttributedString)
         case bulletList([AttributedString])
         case numberedList([NumberedItem])
+        case table(Table)
         case codeBlock(String)
         case quote(AttributedString)
         case rule
@@ -196,6 +303,27 @@ enum MarkdownParser {
                 flushParagraph()
                 emit(.heading(level: heading.level, inline(heading.text)))
                 i += 1
+                continue
+            }
+
+            // GFM pipe table: header row followed immediately by a delimiter row.
+            if i + 1 < lines.count,
+               let header = tableCells(line),
+               let alignments = tableAlignments(lines[i + 1].trimmingCharacters(in: .whitespaces)),
+               header.count == alignments.count {
+                flushParagraph()
+                var rows: [[AttributedString]] = []
+                i += 2
+                while i < lines.count,
+                      let cells = tableCells(lines[i].trimmingCharacters(in: .whitespaces)) {
+                    rows.append(normalizeTableRow(cells, columnCount: header.count).map { inline($0) })
+                    i += 1
+                }
+                emit(.table(.init(
+                    header: header.map { inline($0) },
+                    alignments: alignments,
+                    rows: rows
+                )))
                 continue
             }
 
@@ -297,5 +425,62 @@ enum MarkdownParser {
         guard stripped.count >= 3 else { return false }
         return stripped.allSatisfy { $0 == "-" } || stripped.allSatisfy { $0 == "*" }
             || stripped.allSatisfy { $0 == "_" }
+    }
+
+    /// Splits a GFM table row, allowing optional outer pipes and escaped pipes
+    /// within a cell. Requiring an unescaped separator keeps ordinary prose out
+    /// of the table parser.
+    private static func tableCells(_ line: String) -> [String]? {
+        var cells: [String] = []
+        var cell = ""
+        var sawSeparator = false
+        var escaping = false
+
+        for character in line {
+            if escaping {
+                if character == "|" {
+                    cell.append(character)
+                } else {
+                    cell.append("\\")
+                    cell.append(character)
+                }
+                escaping = false
+            } else if character == "\\" {
+                escaping = true
+            } else if character == "|" {
+                cells.append(cell.trimmingCharacters(in: .whitespaces))
+                cell = ""
+                sawSeparator = true
+            } else {
+                cell.append(character)
+            }
+        }
+        if escaping { cell.append("\\") }
+        cells.append(cell.trimmingCharacters(in: .whitespaces))
+
+        guard sawSeparator else { return nil }
+        if line.first == "|" { cells.removeFirst() }
+        if line.last == "|" { cells.removeLast() }
+        return cells
+    }
+
+    private static func tableAlignments(_ line: String) -> [MarkdownBlock.TableAlignment]? {
+        guard let cells = tableCells(line), !cells.isEmpty else { return nil }
+        var alignments: [MarkdownBlock.TableAlignment] = []
+        for cell in cells {
+            let startsWithColon = cell.hasPrefix(":")
+            let endsWithColon = cell.hasSuffix(":")
+            var dashes = cell
+            if startsWithColon { dashes.removeFirst() }
+            if endsWithColon { dashes.removeLast() }
+            guard dashes.count >= 3, dashes.allSatisfy({ $0 == "-" }) else { return nil }
+            alignments.append(startsWithColon && endsWithColon ? .center : endsWithColon ? .right : .left)
+        }
+        return alignments
+    }
+
+    private static func normalizeTableRow(_ cells: [String], columnCount: Int) -> [String] {
+        Array(cells.prefix(columnCount))
+            + Array(repeating: "", count: max(0, columnCount - cells.count))
     }
 }

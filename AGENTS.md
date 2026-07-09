@@ -35,7 +35,7 @@ Source is grouped by responsibility under `Isle/Isle/` (`App/`, `UI/`, `Input/`,
 
 - `UI/PillPanel.swift` - Borderless non-activating floating `NSPanel`
 - `UI/PillView.swift` - The pill UI: emerge/retract animation, the text-mode input field (`inputField`, a borderless `TextField` bound to `IslandState.draft`, focused via `@FocusState`/`syncFocus()`), the live transcript teleprompter (voice), the answer bubbles (`ResponseBubble`), the phase header (`StatusIndicator`), and `IslandState` (phase + transcript + `draft` + `mode` + staged reveal + `assistantTurns`)
-- `UI/MarkdownText.swift` - Renders a Codex answer as styled markdown (headings, bold/italic, inline + fenced code, bullet/numbered lists, blockquotes, rules). A small line-oriented block splitter (`MarkdownParser`) defers inline styling to `AttributedString(markdown:)`; no SPM dependency
+- `UI/MarkdownText.swift` - Renders a Codex answer as styled markdown (headings, bold/italic, inline + fenced code, bullet/numbered lists, GFM pipe tables, blockquotes, rules). A small line-oriented block splitter (`MarkdownParser`) defers inline styling to `AttributedString(markdown:)`; no SPM dependency
 
 ### Input/
 
