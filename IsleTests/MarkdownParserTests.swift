@@ -39,7 +39,10 @@ struct MarkdownParserTests {
         let parsedTable = try #require(table(in: blocks))
         #expect(parsedTable.rows.count == 2)
         #expect(parsedTable.rows.allSatisfy { $0.count == 2 })
-        #expect(String(parsedTable.rows[0][0].characters) == "")
+        // Short row ("one |") keeps its cell and gets an empty pad appended.
+        #expect(String(parsedTable.rows[0][0].characters) == "one")
+        #expect(String(parsedTable.rows[0][1].characters) == "")
+        // Long row drops the overflow cell ("ignored") past the column count.
         #expect(String(parsedTable.rows[1][0].characters) == "two")
         #expect(String(parsedTable.rows[1][1].characters) == "three")
     }
