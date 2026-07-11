@@ -96,6 +96,10 @@ struct Preferences {
     /// the localhost MCP server. First use asks for full Calendar access.
     var enableCalendarTools: Bool = true
 
+    /// Expose Apple Notes tools through the local MCP server. Notes is controlled
+    /// in-process with AppleScript, using Isle's existing Automation permission.
+    var enableNotesTools: Bool = true
+
     /// Expose Isle's mail tools (read/search/send via Mail.app over AppleScript) to
     /// Codex on the same MCP server. First use prompts for Automation access to Mail,
     /// attributed to Isle. `send_email` sends immediately — there is no confirmation.

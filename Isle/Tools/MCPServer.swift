@@ -29,6 +29,7 @@ actor MCPHTTPServer {
     private let endpoint = "/mcp"
     private let reminderTools: ReminderTools?
     private let calendarTools: CalendarTools?
+    private let notesTools: NotesTools?
     private let mailTools: MailTools?
     private let browserTools: BrowserTools?
 
@@ -38,10 +39,11 @@ actor MCPHTTPServer {
     /// its transport so its message-handling task keeps running.
     private var sessions: [String: (transport: StatefulHTTPServerTransport, server: Server)] = [:]
 
-    init(port: Int, reminders: RemindersService?, calendar: CalendarService?, mail: MailService?, browser: BrowserService?) {
+    init(port: Int, reminders: RemindersService?, calendar: CalendarService?, notes: NotesService?, mail: MailService?, browser: BrowserService?) {
         self.port = port
         self.reminderTools = reminders.map { ReminderTools(service: $0) }
         self.calendarTools = calendar.map { CalendarTools(service: $0) }
+        self.notesTools = notes.map { NotesTools(service: $0) }
         self.mailTools = mail.map { MailTools(service: $0) }
         self.browserTools = browser.map { BrowserTools(service: $0) }
     }
@@ -136,6 +138,7 @@ actor MCPHTTPServer {
             capabilities: .init(tools: .init(listChanged: false)))
         let reminderTools = self.reminderTools
         let calendarTools = self.calendarTools
+        let notesTools = self.notesTools
         let mailTools = self.mailTools
         let browserTools = self.browserTools
         Task {
@@ -143,6 +146,7 @@ actor MCPHTTPServer {
                 var tools: [Tool] = []
                 if reminderTools != nil { tools += ReminderTools.tools }
                 if calendarTools != nil { tools += CalendarTools.tools }
+                if notesTools != nil { tools += NotesTools.tools }
                 if mailTools != nil { tools += MailTools.tools }
                 if browserTools != nil { tools += BrowserTools.tools }
                 return .init(tools: tools)
@@ -153,6 +157,9 @@ actor MCPHTTPServer {
                 }
                 if let calendarTools, CalendarTools.toolNames.contains(params.name) {
                     return await calendarTools.call(name: params.name, arguments: params.arguments)
+                }
+                if let notesTools, NotesTools.toolNames.contains(params.name) {
+                    return await notesTools.call(name: params.name, arguments: params.arguments)
                 }
                 if let browserTools, BrowserTools.toolNames.contains(params.name) {
                     return await browserTools.call(name: params.name, arguments: params.arguments)
