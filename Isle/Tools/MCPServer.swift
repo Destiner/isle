@@ -30,6 +30,7 @@ actor MCPHTTPServer {
     private let reminderTools: ReminderTools?
     private let calendarTools: CalendarTools?
     private let notesTools: NotesTools?
+    private let musicTools: MusicTools?
     private let mailTools: MailTools?
     private let browserTools: BrowserTools?
 
@@ -39,11 +40,12 @@ actor MCPHTTPServer {
     /// its transport so its message-handling task keeps running.
     private var sessions: [String: (transport: StatefulHTTPServerTransport, server: Server)] = [:]
 
-    init(port: Int, reminders: RemindersService?, calendar: CalendarService?, notes: NotesService?, mail: MailService?, browser: BrowserService?) {
+    init(port: Int, reminders: RemindersService?, calendar: CalendarService?, notes: NotesService?, music: MusicService?, mail: MailService?, browser: BrowserService?) {
         self.port = port
         self.reminderTools = reminders.map { ReminderTools(service: $0) }
         self.calendarTools = calendar.map { CalendarTools(service: $0) }
         self.notesTools = notes.map { NotesTools(service: $0) }
+        self.musicTools = music.map { MusicTools(service: $0) }
         self.mailTools = mail.map { MailTools(service: $0) }
         self.browserTools = browser.map { BrowserTools(service: $0) }
     }
@@ -139,6 +141,7 @@ actor MCPHTTPServer {
         let reminderTools = self.reminderTools
         let calendarTools = self.calendarTools
         let notesTools = self.notesTools
+        let musicTools = self.musicTools
         let mailTools = self.mailTools
         let browserTools = self.browserTools
         Task {
@@ -147,6 +150,7 @@ actor MCPHTTPServer {
                 if reminderTools != nil { tools += ReminderTools.tools }
                 if calendarTools != nil { tools += CalendarTools.tools }
                 if notesTools != nil { tools += NotesTools.tools }
+                if musicTools != nil { tools += MusicTools.tools }
                 if mailTools != nil { tools += MailTools.tools }
                 if browserTools != nil { tools += BrowserTools.tools }
                 return .init(tools: tools)
@@ -160,6 +164,9 @@ actor MCPHTTPServer {
                 }
                 if let notesTools, NotesTools.toolNames.contains(params.name) {
                     return await notesTools.call(name: params.name, arguments: params.arguments)
+                }
+                if let musicTools, MusicTools.toolNames.contains(params.name) {
+                    return await musicTools.call(name: params.name, arguments: params.arguments)
                 }
                 if let browserTools, BrowserTools.toolNames.contains(params.name) {
                     return await browserTools.call(name: params.name, arguments: params.arguments)

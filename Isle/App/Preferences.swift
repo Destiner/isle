@@ -76,6 +76,11 @@ struct Preferences {
         browser_evaluate, browser_screenshot, browser_show, browser_hide. You can fully \
         interact with pages — click, type, submit. Call browser_show when a page needs the \
         user — e.g. to sign in.
+        - You can also use Isle's personal-app tools when asked: reminders, Calendar, Apple \
+        Notes, Mail, and Music. Use the relevant MCP tool directly; don't say you lack access \
+        unless a tool call actually fails. For Calendar, Notes, or Music, call its discovery \
+        tool first when you need to identify an item (list_calendars, list_note_folders, or \
+        search_music_library/list_music_playlists).
         """
 
     /// Hard cap on a single `codex exec` run. If Codex hasn't finished within this,
@@ -99,6 +104,9 @@ struct Preferences {
     /// Expose Apple Notes tools through the local MCP server. Notes is controlled
     /// in-process with AppleScript, using Isle's existing Automation permission.
     var enableNotesTools: Bool = true
+
+    /// Expose Music playback and library tools through the local MCP server.
+    var enableMusicTools: Bool = true
 
     /// Expose Isle's mail tools (read/search/send via Mail.app over AppleScript) to
     /// Codex on the same MCP server. First use prompts for Automation access to Mail,

@@ -30,6 +30,22 @@ enum ToolPresentation {
             return ("pencil", "Editing files…")
         case "create_reminder":
             return ("checklist", "Creating a reminder…")
+        case "list_calendars":
+            return ("calendar", "Checking calendars…")
+        case "list_events", "get_event":
+            return ("calendar", "Checking your calendar…")
+        case "create_event", "edit_event":
+            return ("calendar.badge.plus", "Updating your calendar…")
+        case "list_note_folders", "list_notes", "search_notes", "get_note":
+            return ("note.text", "Checking your notes…")
+        case "create_note", "edit_note", "append_to_note":
+            return ("note.text.badge.plus", "Updating your notes…")
+        case "get_now_playing":
+            return ("music.note", "Checking Music…")
+        case "music_playback", "play_music_item":
+            return ("play.fill", "Controlling Music…")
+        case "search_music_library", "list_music_playlists":
+            return ("music.note.list", "Searching Music…")
         case "send_email", "create_draft":
             return ("paperplane", "Working on email…")
         case "browser_navigate":
@@ -38,6 +54,9 @@ enum ToolPresentation {
             // MCP tools without a bespoke label — match the provider family, else
             // a neutral fallback.
             if name.contains("reminder") { return ("checklist", "Checking reminders…") }
+            if name.contains("calendar") || name.contains("event") { return ("calendar", "Checking your calendar…") }
+            if name.contains("note") { return ("note.text", "Checking your notes…") }
+            if name.contains("music") { return ("music.note", "Checking Music…") }
             if name.contains("mail") || name.contains("email") { return ("envelope", "Checking mail…") }
             if name.hasPrefix("browser") { return ("safari", "Browsing…") }
             return ("wrench.and.screwdriver", "Working…")

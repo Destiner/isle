@@ -67,12 +67,11 @@ nonisolated final class AppleNotesProvider: @unchecked Sendable {
     }
 
     func list(folderID: String?, limit: Int) async throws -> [NoteDTO] {
-        try await rows(Self.notesExpr(folderID), limit: limit)
+        try await rows(Self.notesExpr(folderID), query: nil, limit: limit)
     }
 
     func search(query: String, folderID: String?, limit: Int) async throws -> [NoteDTO] {
-        let source = "\(Self.notesExpr(folderID)) whose plaintext contains \(Self.literal(query))"
-        return try await rows(source, limit: limit)
+        try await rows(Self.notesExpr(folderID), query: query, limit: limit)
     }
 
     func get(id: String) async throws -> NoteDTO {
@@ -129,11 +128,20 @@ nonisolated final class AppleNotesProvider: @unchecked Sendable {
         return note
     }
 
-    private func rows(_ expression: String, limit: Int) async throws -> [NoteDTO] {
+    private func rows(_ expression: String, query: String?, limit: Int) async throws -> [NoteDTO] {
+        let matching = query.map { """
+            set ns to {}
+            repeat with n in allNotes
+                try
+                    if (plaintext of n as text) contains \(Self.literal($0)) then set end of ns to n
+                end try
+            end repeat
+            """ } ?? "set ns to allNotes"
         let raw = try await run("""
         \(Self.prelude)
         tell application "Notes"
-            set ns to \(expression)
+            set allNotes to \(expression)
+            \(matching)
             set lim to \(max(0, min(limit, 100)))
             if (count of ns) < lim then set lim to count of ns
             set out to ""
@@ -147,7 +155,7 @@ nonisolated final class AppleNotesProvider: @unchecked Sendable {
     }
 
     private static func notesExpr(_ folderID: String?) -> String {
-        folderID.map { "notes of folder id \(literal($0))" } ?? "notes"
+        folderID.map { "every note of folder id \(literal($0))" } ?? "every note"
     }
 
     private static let prelude = """
