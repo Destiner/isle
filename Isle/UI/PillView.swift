@@ -71,14 +71,13 @@ final class IslandState: ObservableObject {
     /// reads "Error" (red) instead of "Ready" (green). Otherwise an error turn
     /// behaves like any response (stays on screen; voice re-arms for a retry).
     @Published private(set) var isError = false
-    /// Tool/MCP calls surfaced while Codex works (icon + label). Populated during
-    /// `.thinking` and cleared at every turn boundary (folded into
-    /// `clearTranscript`). The data path from `CodexClient`'s `--json` event log
-    /// isn't wired yet — today this is driven directly (see the gallery).
-    /// The tool/MCP call currently running — a single slot, so a new call
-    /// replaces (and rolls over) the prior one rather than stacking. Nil when
-    /// nothing's running, so the pill falls back to the plain "Thinking" row.
-    /// Cleared at every turn boundary (folded into `clearTranscript`).
+    /// The tool/MCP call currently shown while Codex works (icon + label), fed by
+    /// `CodexClient`'s `--json` event stream via `beginTool`/`endTool`. A single
+    /// slot, so a new call replaces (and rolls over) the prior one rather than
+    /// stacking; nil when nothing's running, so the pill falls back to the plain
+    /// "Thinking" row. Changes are debounced through `setTool` (min-display gate)
+    /// so instant calls don't flicker past. Cleared at every turn boundary
+    /// (folded into `clearTranscript`).
     @Published private(set) var currentTool: ToolActivity?
     /// The message the user just submitted, shown while the model is thinking so
     /// it's clear what's being answered. Voice has the live transcript for this;
@@ -95,6 +94,17 @@ final class IslandState: ObservableObject {
     private var staging = false
     private var turnCounter = 0
     private var toolCounter = 0
+
+    // Tool-row debounce: keep each shown tool visible for at least this long so
+    // near-instant back-to-back calls don't flicker past unread. See `setTool`.
+    private let minToolDisplay: TimeInterval = 1.0
+    /// When the visible tool last changed to a non-nil value; nil while none shown.
+    private var toolShownAt: Date?
+    /// Latest desired tool state, applied once the visible tool has had its time.
+    /// `hasPendingTool` distinguishes "nothing queued" from "queued a clear (nil)".
+    private var pendingTool: ToolActivity?
+    private var hasPendingTool = false
+    private var toolFlipWork: DispatchWorkItem?
 
     var hasTranscript: Bool { !words.isEmpty }
     var hasHistory: Bool { !assistantTurns.isEmpty }
@@ -203,8 +213,9 @@ final class IslandState: ObservableObject {
         staging = false
         // Every clearTranscript site is a turn boundary (new turn / answer / close),
         // so the running tool and the pending user message — both transient to the
-        // turn that spawned them — reset here too.
-        currentTool = nil
+        // turn that spawned them — reset here too. `applyTool(nil)` also cancels any
+        // deferred flip so a stale step can't surface over the next turn's answer.
+        applyTool(nil)
         userMessage = ""
     }
 
@@ -223,12 +234,53 @@ final class IslandState: ObservableObject {
 
     func beginTool(icon: String, label: String) {
         toolCounter += 1
-        currentTool = ToolActivity(id: toolCounter, icon: icon, label: label)
+        setTool(ToolActivity(id: toolCounter, icon: icon, label: label))
     }
 
     /// The tool finished with nothing else running → back to the plain "Thinking".
     func endTool() {
-        currentTool = nil
+        setTool(nil)
+    }
+
+    /// Every tool change funnels through this min-display gate. If nothing's
+    /// shown yet, or the visible tool has already had its `minToolDisplay`, the
+    /// change applies at once; otherwise it's recorded as the latest desired
+    /// state and applied when the window ends. Bursts coalesce to the latest —
+    /// every *shown* step gets its second, sub-second blips in between are
+    /// skipped (this is a live status, not a log). A long-running tool clears
+    /// as soon as it ends, since its window is long past.
+    private func setTool(_ next: ToolActivity?) {
+        guard let shownAt = toolShownAt else {
+            applyTool(next)   // nothing visible → show immediately
+            return
+        }
+        let remaining = minToolDisplay - Date().timeIntervalSince(shownAt)
+        if remaining <= 0 {
+            applyTool(next)
+        } else {
+            pendingTool = next
+            hasPendingTool = true
+            scheduleToolFlip(after: remaining)
+        }
+    }
+
+    private func applyTool(_ tool: ToolActivity?) {
+        toolFlipWork?.cancel()
+        toolFlipWork = nil
+        pendingTool = nil
+        hasPendingTool = false
+        currentTool = tool
+        toolShownAt = tool == nil ? nil : Date()
+    }
+
+    private func scheduleToolFlip(after delay: TimeInterval) {
+        toolFlipWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self, self.hasPendingTool else { return }
+            self.applyTool(self.pendingTool)
+        }
+        toolFlipWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
     }
 
     /// Append-only reconciliation: the live preview only grows with genuinely
