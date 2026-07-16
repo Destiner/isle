@@ -5,18 +5,23 @@
 
 import AppKit
 import AVFoundation
-import FluidAudio
 
-/// Records speech while Isle is visible and, on Enter, transcribes it
-/// locally with Parakeet (via FluidAudio / CoreML), then sends the transcript to
-/// Codex and reports back its answer. The model is downloaded once on first
-/// launch and cached.
+/// Records speech while Isle is visible and, on Enter, transcribes it locally,
+/// then sends the transcript to Codex and reports back its answer. The
+/// transcription backend is swappable (`Preferences.speechBackend`): Apple's
+/// on-device `SpeechAnalyzer` (default) or Parakeet via FluidAudio — this class
+/// owns the mic and the silence endpointing and drives whichever is selected
+/// through the `Transcriber` seam.
 @MainActor
 final class DictationManager {
     private let recorder = AudioRecorder()
     private let codex: CodexClient
-    private var asr: AsrManager?
-    private var isTranscribing = false
+    private let transcriber: Transcriber
+
+    /// Whether the transcriber has an utterance in flight — i.e. `begin()` was
+    /// called and audio is being fed. False for a follow-up armed with
+    /// `preview: false` until speech onset flips on the live preview.
+    private var previewing = false
     private var prepared = false
 
     /// Tuning knobs (endpointing thresholds, live-preview cadence, Codex
@@ -31,6 +36,9 @@ final class DictationManager {
                 ? "http://127.0.0.1:\(preferences.mcpPort)/mcp" : nil,
             computerAccess: preferences.computerAccess,
             timeout: preferences.codexTimeout)
+        self.transcriber = TranscriberFactory.make(
+            preferences.speechBackend, previewInterval: preferences.partialInterval)
+        self.transcriber.onPreview = { [weak self] text in self?.onPartialTranscript?(text) }
     }
 
     /// The running conversation, passed back to Codex on each turn so it has the
@@ -64,38 +72,22 @@ final class DictationManager {
     /// listening the moment the user starts a follow-up — hands-free both ways.
     var onSpeechStart: (() -> Void)?
 
-    /// Parakeet rejects clips shorter than 0.3 s; require a touch more.
-    private let minPartialSamples = 16_000 * 4 / 10  // 0.4 s at 16 kHz
-    private var partialTask: Task<Void, Never>?
-    private var partialInFlight = false
-
     // Silence-based endpointing. A cheap RMS gate ticks on its own cadence
     // (decoupled from transcription latency) and fires `onEndpoint` once the
     // speaker has talked for at least `preferences.minSpeech` and then fallen
     // quiet for `preferences.endpointSilence`. Thresholds live in `Preferences`.
     private var endpointTask: Task<Void, Never>?
 
-    /// Requests mic access and loads (downloading on first run) the English
-    /// Parakeet v2 model. Idempotent — safe to call at launch and again on the
-    /// first Tab switch into voice. Runs in the background.
+    /// Requests mic access and loads the transcription backend (downloading
+    /// models/assets on first run). Idempotent — safe to call at launch and
+    /// again on the first Tab switch into voice. Runs in the background.
     func prepare() {
         guard !prepared else { return }
         prepared = true
 
-        // Request mic access independently so it never blocks the model download.
+        // Request mic access independently so it never blocks model loading.
         Task { await requestMicAccess() }
-
-        Task {
-            do {
-                let models = try await AsrModels.downloadAndLoad(version: .v2)
-                let manager = AsrManager(config: .default)
-                try await manager.loadModels(models)
-                asr = manager
-                Log.voice("asr.loaded")
-            } catch {
-                Log.error("asr.load", "\(error)")
-            }
-        }
+        Task { await transcriber.prepare() }
     }
 
     /// Starts capturing audio. Recording does not need the model loaded — the
@@ -106,53 +98,67 @@ final class DictationManager {
     /// runs (no transcribing the user's reading-silence), and `enableLivePreview()`
     /// starts the transcript loop once they actually speak.
     func startRecording(preview: Bool = true) {
+        if preview {
+            transcriber.begin()
+            previewing = true
+            let transcriber = self.transcriber
+            recorder.setBufferSink { transcriber.append($0) }
+        } else {
+            previewing = false
+            recorder.setBufferSink(nil)
+        }
+
         do {
             try recorder.start()
         } catch {
             Log.error("recording.start", "\(error)")
+            if previewing { transcriber.cancel(); previewing = false }
             return
         }
         Log.voice("recording.start", ["preview": preview])
         onPartialTranscript?("")
-        if preview { startPartialLoop() }
         startEndpointLoop()
     }
 
     /// Starts the live transcript loop on an already-running recording. Used when
-    /// a follow-up (armed with `preview: false`) turns into real listening.
+    /// a follow-up (armed with `preview: false`) turns into real listening. Primes
+    /// the transcriber with the last moment of audio so the first words — captured
+    /// before onset flipped us here — aren't lost, then streams the rest.
     func enableLivePreview() {
-        guard recorder.isRecording else { return }
-        startPartialLoop()
+        guard recorder.isRecording, !previewing else { return }
+        transcriber.begin()
+        previewing = true
+        transcriber.append(recorder.trailing(seconds: preferences.onsetSpeech + 0.3))
+        let transcriber = self.transcriber
+        recorder.setBufferSink { transcriber.append($0) }
     }
 
     /// Stops recording, transcribes the clip, and sends the transcript to Codex,
     /// reporting the answer (or a failure) through the callbacks.
     func finishAndRespond() {
-        partialTask?.cancel()
-        partialTask = nil
         endpointTask?.cancel()
         endpointTask = nil
+        recorder.setBufferSink(nil)
+        _ = recorder.stop()
 
-        let samples = recorder.stop()
-        guard let asr, !samples.isEmpty else {
+        guard previewing else {
             Log.voice("capture.empty")
             onNoResponse?(nil)
             return
         }
+        previewing = false
 
         Task {
-            do {
-                var state = TdtDecoderState.make(decoderLayers: await asr.decoderLayerCount)
-                let result = try await asr.transcribe(samples, decoderState: &state)
-                let prompt = result.text.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !prompt.isEmpty else {
-                    Log.voice("capture.empty")
-                    onNoResponse?(nil)
-                    return
-                }
-                Log.turnUser(source: .voice, text: prompt)
-                onFinalTranscript?(prompt)
+            let prompt = await transcriber.finish()
+            guard !prompt.isEmpty else {
+                Log.voice("capture.empty")
+                onNoResponse?(nil)
+                return
+            }
+            Log.turnUser(source: .voice, text: prompt)
+            onFinalTranscript?(prompt)
 
+            do {
                 let answer = try await codex.send(
                     prompt, history: history, effort: preferences.reasoningEffort,
                     onTool: { [weak self] event in
@@ -165,8 +171,8 @@ final class DictationManager {
             } catch let error as CodexClient.CodexError {
                 onNoResponse?(error.localizedDescription)
             } catch {
-                Log.error("transcribe", "\(error)")
-                onNoResponse?("Couldn't transcribe that")
+                Log.error("codex.send", "\(error)")
+                onNoResponse?("Something went wrong")
             }
         }
     }
@@ -212,32 +218,20 @@ final class DictationManager {
     /// used when the user toggles Isle off mid-listen. Safe to call when not
     /// recording. The conversation history is left intact.
     func cancelRecording() {
-        partialTask?.cancel()
-        partialTask = nil
         endpointTask?.cancel()
         endpointTask = nil
+        recorder.setBufferSink(nil)
         _ = recorder.stop()
+        if previewing {
+            transcriber.cancel()
+            previewing = false
+        }
     }
 
     /// Forgets the conversation so the next request starts a fresh context.
     func clearHistory() {
         history.removeAll()
         Log.endConversation()
-    }
-
-    /// Periodically re-transcribes the whole accumulated buffer while recording,
-    /// emitting the running text so the UI can show speech as it's recognized.
-    /// Re-transcribing from scratch (fresh decoder state) keeps the text clean
-    /// without token-stitching; utterances are short enough that it stays fast.
-    private func startPartialLoop() {
-        partialTask?.cancel()
-        partialTask = Task { [weak self] in
-            while !Task.isCancelled {
-                try? await Task.sleep(for: self?.preferences.partialInterval ?? .milliseconds(350))
-                if Task.isCancelled { return }
-                await self?.emitPartialTranscript()
-            }
-        }
     }
 
     /// Ticks a cheap RMS silence gate on a fixed cadence while recording. Once
@@ -267,7 +261,11 @@ final class DictationManager {
                         Log.voice("speech.onset")
                         self.onSpeechStart?()
                     }
-                } else if speech >= self.preferences.minSpeech {
+                } else if onsetFired {
+                    // Arm the silence gate on onset (≥ onsetSpeech of speech
+                    // confirmed), not a separate higher `minSpeech` bar: when the
+                    // mic is quiet, `speech` can plateau just under `minSpeech` and
+                    // deadlock, so the turn never auto-submits.
                     silence += tick
                     if silence >= self.preferences.endpointSilence {
                         self.endpointTask = nil
@@ -277,23 +275,6 @@ final class DictationManager {
                     }
                 }
             }
-        }
-    }
-
-    private func emitPartialTranscript() async {
-        guard let asr, !partialInFlight else { return }
-        let samples = recorder.snapshot()
-        guard samples.count >= minPartialSamples else { return }
-
-        partialInFlight = true
-        defer { partialInFlight = false }
-        do {
-            var state = TdtDecoderState.make(decoderLayers: await asr.decoderLayerCount)
-            let result = try await asr.transcribe(samples, decoderState: &state)
-            guard !Task.isCancelled, recorder.isRecording else { return }
-            onPartialTranscript?(result.text.trimmingCharacters(in: .whitespacesAndNewlines))
-        } catch {
-            // Transient (e.g. too-short clip mid-stream); the next tick retries.
         }
     }
 

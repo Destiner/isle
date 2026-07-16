@@ -433,6 +433,7 @@
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Isle transcribes your speech to text while you hold the fn key.";
 				INFOPLIST_KEY_NSRemindersFullAccessUsageDescription = "Isle reads and edits your reminders when you ask it to.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Isle transcribes your speech to text on-device.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -471,6 +472,7 @@
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Isle transcribes your speech to text while you hold the fn key.";
 				INFOPLIST_KEY_NSRemindersFullAccessUsageDescription = "Isle reads and edits your reminders when you ask it to.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Isle transcribes your speech to text on-device.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",

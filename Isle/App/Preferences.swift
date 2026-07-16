@@ -12,6 +12,18 @@ enum InputMode: String {
     case text
 }
 
+/// Which on-device speech-to-text backend transcribes voice input. Both run
+/// fully locally; swap them to compare latency/accuracy/feel in vivo.
+///
+/// - `.apple`: Apple's `SpeechAnalyzer` / `SpeechTranscriber` (macOS 26+),
+///   streaming, with OS-managed locale model assets — no app-owned model blob.
+/// - `.parakeet`: FluidAudio's Parakeet on CoreML / Neural Engine. Selecting
+///   this triggers a one-time ~450 MB model download on first use.
+enum SpeechBackend: String {
+    case apple
+    case parakeet
+}
+
 /// Tunable knobs that shape Isle's behavior, in one place. Today these are
 /// compile-time defaults for personal use; the struct is the seam a future
 /// settings UI (or a `UserDefaults`-backed store) can hang off — build the
@@ -28,6 +40,11 @@ struct Preferences {
     /// How long the pill can sit closed before the conversation is cleared, so
     /// the next open starts fresh.
     var idleTimeout: TimeInterval = 5 * 60
+
+    /// On-device transcription backend for voice mode. Parakeet is the default —
+    /// the Apple `SpeechAnalyzer` backend works but currently transcribes less
+    /// accurately; flip to `.apple` to try it. See `SpeechBackend` / `Transcriber`.
+    var speechBackend: SpeechBackend = .parakeet
 
     /// Write structured debug logs (Codex runs, tool calls, turns, voice) to
     /// `~/Library/Application Support/Isle/logs/`. Debug builds only — the whole
@@ -161,8 +178,10 @@ struct Preferences {
     /// syllable-level gaps in speech don't read as silence.
     var endpointWindow: Double = 0.6
 
-    /// RMS below this marks the trailing window as "quiet".
-    var silenceThreshold: Float = 0.008
+    /// RMS below this marks the trailing window as "quiet". Heuristic and
+    /// mic-dependent: measured speech peaks ~0.003–0.007 on a quiet external mic
+    /// (floor ~0.001), so this sits between them. Raise it for a hotter mic.
+    var silenceThreshold: Float = 0.003
 
     /// Speech that must accrue before sustained silence can end the turn.
     var minSpeech: Double = 0.4
