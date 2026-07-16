@@ -196,6 +196,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Tab flips text ⇄ voice while the pill is open (handled by FnKeyMonitor's
         // local monitor, so it only fires when Isle itself has focus).
         fnMonitor.onSwitchMode = { [weak self] in self?.switchMode() }
+        // ⌘N while the pill is open clears the conversation and starts fresh.
+        fnMonitor.onNewChat = { [weak self] in self?.newChat() }
         fnMonitor.start()
     }
 
@@ -217,6 +219,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             dictation.prepare()        // lazy first load; no-op once loaded
             dictation.startRecording()
         }
+    }
+
+    /// Clear the conversation and start a fresh chat without closing the pill
+    /// (⌘N). Same clear as the idle timer — the model-facing `history` and the
+    /// on-screen answers — then re-arm the current mode's composer so the next
+    /// message can go straight in. Only meaningful while the pill is open.
+    private func newChat() {
+        guard state.isOpen else { return }
+        if state.mode == .voice { dictation.cancelRecording() }
+        Log.app("chat.new")
+        dictation.clearHistory()
+        state.reset()
+        state.startTurn()
+        if state.mode == .voice { dictation.startRecording() }
     }
 
     /// After an answer is shown in voice mode, silently open the mic and run the

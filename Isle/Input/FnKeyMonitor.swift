@@ -24,6 +24,8 @@ final class FnKeyMonitor {
     var onSubmit: (() -> Void)?
     /// Fired when Tab is pressed while Isle holds focus (switch input mode).
     var onSwitchMode: (() -> Void)?
+    /// Fired on ⌘N while Isle holds focus (clear + start a new chat).
+    var onNewChat: (() -> Void)?
 
     private var globalMonitor: Any?
     private var localMonitor: Any?
@@ -70,6 +72,9 @@ final class FnKeyMonitor {
         // event passes through to the field's own onSubmit).
         localKeyDownMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             switch event.keyCode {
+            case UInt16(kVK_ANSI_N) where event.modifierFlags.contains(.command):
+                self?.onNewChat?()
+                return nil
             case UInt16(kVK_Tab):
                 self?.onSwitchMode?()
                 return nil
