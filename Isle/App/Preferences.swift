@@ -24,6 +24,15 @@ enum SpeechBackend: String {
     case parakeet
 }
 
+/// Which backend the mail tools run against. `.appleMail` drives Mail.app over
+/// AppleScript (fronts every configured account, works offline, but slow — ~10
+/// Apple Events per message); `.fastmail` talks JMAP over HTTPS directly (one
+/// request per list/search, needs a Fastmail API token, single-account for now).
+enum MailBackend: String {
+    case appleMail
+    case fastmail
+}
+
 /// Tunable knobs that shape Isle's behavior, in one place. Today these are
 /// compile-time defaults for personal use; the struct is the seam a future
 /// settings UI (or a `UserDefaults`-backed store) can hang off — build the
@@ -125,10 +134,25 @@ struct Preferences {
     /// Expose Music playback and library tools through the local MCP server.
     var enableMusicTools: Bool = true
 
-    /// Expose Isle's mail tools (read/search/send via Mail.app over AppleScript) to
-    /// Codex on the same MCP server. First use prompts for Automation access to Mail,
-    /// attributed to Isle. `send_email` sends immediately — there is no confirmation.
+    /// Expose Isle's mail tools (read/search/send) to Codex on the same MCP server.
+    /// `send_email` sends immediately — there is no confirmation. The backend is
+    /// chosen by `mailBackend`.
     var enableMailTools: Bool = true
+
+    /// Which backend the mail tools run against (see `MailBackend`). `.fastmail`
+    /// (JMAP) is the default; `.appleMail` is kept as an offline / all-accounts
+    /// fallback. Selecting `.fastmail` needs a token (see `FastmailCredentials`).
+    var mailBackend: MailBackend = .fastmail
+
+    /// Builds the mail backend `MailService` runs against, per `mailBackend`. A
+    /// missing Fastmail token doesn't fail here — it surfaces as a readable error on
+    /// the first tool call (`JMAPMailProvider.requireClient`).
+    func makeMailProvider() -> MailProvider {
+        switch mailBackend {
+        case .appleMail: AppleMailProvider()
+        case .fastmail: JMAPMailProvider(tokenProvider: { FastmailCredentials.token })
+        }
+    }
 
     /// Expose Isle's browser tools (navigate/read/click/type/evaluate/screenshot) to
     /// Codex on the same MCP server. Drives the user's installed Chrome over CDP — no

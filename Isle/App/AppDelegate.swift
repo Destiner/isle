@@ -90,7 +90,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 calendar: preferences.enableCalendarTools ? CalendarService() : nil,
                 notes: preferences.enableNotesTools ? NotesService() : nil,
                 music: preferences.enableMusicTools ? MusicService() : nil,
-                mail: preferences.enableMailTools ? MailService() : nil,
+                mail: preferences.enableMailTools ? MailService(provider: preferences.makeMailProvider()) : nil,
                 browser: preferences.enableBrowserTools ? BrowserService(port: preferences.chromeDebuggingPort, headless: preferences.chromeHeadless) : nil)
             mcpServer = server
             Task.detached {

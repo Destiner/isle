@@ -38,6 +38,10 @@ enum MailError: LocalizedError {
     case notFound
     case badID(String)
     case script(String)
+    /// The active backend isn't set up (e.g. no Fastmail API token).
+    case notConfigured(String)
+    /// A non-AppleScript backend (JMAP/HTTP) failed — the message is already readable.
+    case backend(String)
 
     var errorDescription: String? {
         switch self {
@@ -49,6 +53,10 @@ enum MailError: LocalizedError {
             "\"\(id)\" isn't a valid message id (use one returned by search_emails/list_emails)."
         case .script(let message):
             "Mail scripting failed: \(message)"
+        case .notConfigured(let message):
+            message
+        case .backend(let message):
+            message
         }
     }
 }
