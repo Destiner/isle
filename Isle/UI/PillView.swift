@@ -85,6 +85,14 @@ final class IslandState: ObservableObject {
     /// turn boundary (folded into `clearTranscript`).
     @Published private(set) var userMessage: String = ""
 
+    /// Recent-chats switcher (press ↑ in the empty new-chat state; text mode
+    /// only). `chatOptions` are chronological (oldest first), so `selection`
+    /// starts on the last row — the latest chat — and a single ↓ drops back out
+    /// to the empty state. Populated by `AppDelegate` from `ChatStore`.
+    @Published private(set) var isSwitching = false
+    @Published private(set) var chatOptions: [ChatSummary] = []
+    @Published private(set) var switcherSelection = 0
+
     /// Wrap width (pill width minus padding); set by the view once laid out.
     var availableTextWidth: CGFloat = 344
 
@@ -117,6 +125,51 @@ final class IslandState: ObservableObject {
         return assistantTurns.last?.id
     }
 
+    /// The empty new-chat state where ↑ opens the switcher: text mode, pill open,
+    /// nothing captured, submitted, or answered yet.
+    var isEmptyNewChat: Bool {
+        mode == .text && isOpen && phase == .listening
+            && assistantTurns.isEmpty && userMessage.isEmpty
+    }
+
+    /// The selection is on the last (latest) row, so ↓ exits the switcher.
+    var switcherAtLast: Bool { switcherSelection >= chatOptions.count - 1 }
+
+    /// The chat the switcher is currently pointing at, if any.
+    var selectedChatID: UUID? {
+        guard chatOptions.indices.contains(switcherSelection) else { return nil }
+        return chatOptions[switcherSelection].id
+    }
+
+    /// Show the recent-chats list. `options` are chronological (oldest first),
+    /// so the selection opens on the last row (the latest chat).
+    func openSwitcher(_ options: [ChatSummary]) {
+        guard !options.isEmpty else { return }
+        chatOptions = options
+        switcherSelection = options.count - 1
+        isSwitching = true
+    }
+
+    /// Move the selection, clamped to the list (the caller handles ↓-past-last).
+    func moveSwitcher(by delta: Int) {
+        let next = switcherSelection + delta
+        guard chatOptions.indices.contains(next) else { return }
+        switcherSelection = next
+    }
+
+    /// Point the selection at a specific row (hover).
+    func setSwitcherSelection(_ index: Int) {
+        guard chatOptions.indices.contains(index) else { return }
+        switcherSelection = index
+    }
+
+    /// Leave the switcher, back to the empty new-chat state.
+    func closeSwitcher() {
+        isSwitching = false
+        chatOptions = []
+        switcherSelection = 0
+    }
+
     /// Full clear (fresh start / conversation idled out): drops the transcript
     /// and all answers.
     func reset() {
@@ -125,6 +178,7 @@ final class IslandState: ObservableObject {
         draft = ""
         phase = .listening
         isError = false
+        closeSwitcher()
     }
 
     /// Closing the pill: drop the in-progress compose but keep the answers (and
@@ -151,6 +205,25 @@ final class IslandState: ObservableObject {
         draft = ""
         phase = .listening
         isError = false
+        closeSwitcher()
+    }
+
+    /// Reinstate a saved chat's answers on screen: rebuild the turns and present
+    /// the last one as the active response, ready for a follow-up — the same
+    /// on-screen shape as `restore()`. The model-facing history is restored
+    /// separately in `DictationManager` (see `AppDelegate.reinstate`).
+    func reinstate(assistantTexts: [String]) {
+        clearTranscript()
+        draft = ""
+        var rebuilt: [AssistantTurn] = []
+        for text in assistantTexts {
+            turnCounter += 1
+            rebuilt.append(AssistantTurn(id: turnCounter, text: text))
+        }
+        assistantTurns = rebuilt
+        phase = .responding
+        isError = false
+        closeSwitcher()
     }
 
     /// Speech capture is done; we're now waiting on Codex.
@@ -369,9 +442,15 @@ struct PillView: View {
     var expandedWidth: CGFloat
     /// Called when the user presses Enter in the text field.
     var onSubmitText: () -> Void
+    /// Called when ↑ is pressed on an empty field in the new-chat state — asks
+    /// AppDelegate to load recent chats and open the switcher.
+    var onOpenSwitcher: () -> Void
+    /// Called when a chat is chosen from the switcher (Enter or click).
+    var onReinstate: (UUID) -> Void
     var onQuit: () -> Void
 
     @FocusState private var inputFocused: Bool
+    @FocusState private var switcherFocused: Bool
     /// Ties the text composer and the greyed submitted-message together so the
     /// draft appears to grey out and slide into place rather than pop.
     @Namespace private var composeNS
@@ -407,7 +486,7 @@ struct PillView: View {
     /// Codex isn't mid-thought — so the next question can be typed right after an
     /// answer without any extra gesture.
     private var showsInput: Bool {
-        state.mode == .text && state.phase != .thinking
+        state.mode == .text && state.phase != .thinking && !state.isSwitching
     }
 
     /// While responding, show the active answer. Otherwise show the previous
@@ -426,7 +505,7 @@ struct PillView: View {
     /// transcript, any answer, or running tool steps.
     private var expanded: Bool {
         showsUserMessage || showsUserText || !visibleTurns.isEmpty || showsInput
-            || state.currentTool != nil || state.phase == .thinking
+            || state.currentTool != nil || state.phase == .thinking || state.isSwitching
     }
 
     var body: some View {
@@ -443,6 +522,7 @@ struct PillView: View {
             .animation(.spring(response: 0.4, dampingFraction: 0.85), value: state.assistantTurns.count)
             .animation(.spring(response: 0.4, dampingFraction: 0.85), value: state.currentTool?.id)
             .animation(.spring(response: 0.4, dampingFraction: 0.85), value: state.mode)
+            .animation(.spring(response: 0.36, dampingFraction: 0.82), value: state.isSwitching)
             // Grow/shrink the multiline field smoothly as lines are added/removed.
             .animation(.spring(response: 0.28, dampingFraction: 0.9), value: state.draft)
             .onAppear { state.availableTextWidth = expandedWidth - 2 * textPadding }
@@ -453,6 +533,11 @@ struct PillView: View {
             // A Tab switch can land on text mode without changing phase, so react
             // to the mode flip too — grab the caret for text, drop it for voice.
             .onChange(of: state.mode) { _, _ in syncFocus() }
+            // Hand focus to the switcher list while it's open (so arrows/Enter
+            // reach it), and back to the field when it closes.
+            .onChange(of: state.isSwitching) { _, on in
+                if on { switcherFocused = true } else { syncFocus() }
+            }
             .contextMenu { Button("Quit Isle", action: onQuit) }
     }
 
@@ -498,6 +583,32 @@ struct PillView: View {
             if showsInput {
                 inputField
                     .padding(.top, visibleTurns.isEmpty ? 0 : 10)
+            }
+
+            // Recent-chats switcher (↑ from the empty new-chat state).
+            if state.isSwitching {
+                ChatSwitcherList(
+                    options: state.chatOptions,
+                    selection: state.switcherSelection,
+                    onSelect: { onReinstate($0) },
+                    onHover: { state.setSwitcherSelection($0) }
+                )
+                .focusable()
+                .focused($switcherFocused)
+                .focusEffectDisabled()
+                .transition(.opacity)
+                .onKeyPress(.upArrow) { state.moveSwitcher(by: -1); return .handled }
+                .onKeyPress(.downArrow) {
+                    // ↓ past the last (latest) row drops back to the empty state.
+                    if state.switcherAtLast { state.closeSwitcher() }
+                    else { state.moveSwitcher(by: 1) }
+                    return .handled
+                }
+                .onKeyPress(.return) {
+                    if let id = state.selectedChatID { onReinstate(id) }
+                    return .handled
+                }
+                .onKeyPress(.escape) { state.closeSwitcher(); return .handled }
             }
 
             // Bottom-left status affordance: tool steps while thinking, else the
@@ -555,6 +666,13 @@ struct PillView: View {
             // pasting multiline text no longer triggers a send.
             .onKeyPress(keys: [.return], phases: .down) { _ in
                 onSubmitText()
+                return .handled
+            }
+            // ↑ on an empty field in the new-chat state opens the recent-chats
+            // switcher; with any text typed it stays a normal caret move.
+            .onKeyPress(.upArrow) {
+                guard state.draft.isEmpty, state.isEmptyNewChat else { return .ignored }
+                onOpenSwitcher()
                 return .handled
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -788,6 +906,76 @@ private struct TranscriptText: View {
 }
 
 
+/// The recent-chats list shown when ↑ is pressed in the empty new-chat state.
+/// Rows are chronological (oldest first); the selected row is highlighted, and
+/// the whole list carries focus so arrows/Enter drive it (see PillView).
+private struct ChatSwitcherList: View {
+    let options: [ChatSummary]
+    let selection: Int
+    var onSelect: (UUID) -> Void
+    var onHover: (Int) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("RECENT")
+                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                .foregroundStyle(.white.opacity(0.35))
+                .padding(.horizontal, 4)
+
+            VStack(spacing: 2) {
+                ForEach(Array(options.enumerated()), id: \.element.id) { index, chat in
+                    ChatSwitcherRow(chat: chat, selected: index == selection)
+                        .contentShape(Rectangle())
+                        .onTapGesture { onSelect(chat.id) }
+                        .onHover { if $0 { onHover(index) } }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// One row: the chat's first user message (truncated) plus its age, anchored to
+/// the first message. The selected row brightens and gets a subtle fill.
+private struct ChatSwitcherRow: View {
+    let chat: ChatSummary
+    let selected: Bool
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Text(chat.firstUserMessage)
+                .font(.system(size: TranscriptMetrics.fontSize, weight: .regular, design: .rounded))
+                .foregroundStyle(selected ? .white : .white.opacity(0.7))
+                .lineLimit(1)
+                .truncationMode(.tail)
+            Spacer(minLength: 8)
+            Text(Self.relativeAge(chat.startedAt))
+                .font(.system(size: 11, weight: .medium, design: .rounded))
+                .foregroundStyle(.white.opacity(selected ? 0.55 : 0.3))
+                .monospacedDigit()
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(.white.opacity(selected ? 0.12 : 0))
+        )
+    }
+
+    /// Compact relative age like "3m", "6d", "7mo" (m = minutes, mo = months).
+    static func relativeAge(_ date: Date, now: Date = Date()) -> String {
+        let s = max(0, now.timeIntervalSince(date))
+        switch s {
+        case ..<60:          return "now"
+        case ..<3600:        return "\(Int(s / 60))m"
+        case ..<86_400:      return "\(Int(s / 3600))h"
+        case ..<2_592_000:   return "\(Int(s / 86_400))d"
+        case ..<31_536_000:  return "\(Int(s / 2_592_000))mo"
+        default:             return "\(Int(s / 31_536_000))y"
+        }
+    }
+}
+
 #Preview {
     let state = IslandState()
     state.isOpen = true
@@ -811,6 +999,8 @@ private struct TranscriptText: View {
         topRoom: 30,
         expandedWidth: 360,
         onSubmitText: {},
+        onOpenSwitcher: {},
+        onReinstate: { _ in },
         onQuit: {}
     )
     .frame(width: 420, height: 300)

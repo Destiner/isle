@@ -234,6 +234,17 @@ final class DictationManager {
         Log.endConversation()
     }
 
+    /// The running conversation, so `AppDelegate` can persist the live chat after
+    /// each answer.
+    var currentHistory: [CodexClient.Turn] { history }
+
+    /// Replace the conversation with a saved chat's transcript (reinstating it),
+    /// so a follow-up is answered in that chat's context. `codex exec` is
+    /// one-shot, so restoring the replayed history is all that's needed.
+    func loadHistory(_ turns: [CodexClient.Turn]) {
+        history = turns
+    }
+
     /// Ticks a cheap RMS silence gate on a fixed cadence while recording. Once
     /// the speaker has talked for `minSpeech` and then stayed quiet for
     /// `endpointSilence`, fires `onEndpoint` (the auto-submit cue) and stops.

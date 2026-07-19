@@ -16,6 +16,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let preferences = Preferences()
     private lazy var dictation = DictationManager(preferences: preferences)
 
+    // Persists recent chats so ↑ in the empty new-chat state can switch between
+    // them. `currentChatID` tracks the live chat so each answer upserts the same
+    // record; nil until the first turn lands (or after a fresh/cleared start).
+    private let chatStore = ChatStore()
+    private var currentChatID: UUID?
+    private var currentChatStartedAt: Date?
+
     // Hosts Isle's reminder + mail tools as a localhost MCP server for Codex to call.
     private var mcpServer: MCPHTTPServer?
 
@@ -60,6 +67,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 topRoom: topRoom,
                 expandedWidth: expandedWidth,
                 onSubmitText: { [weak self] in self?.submitTypedText() },
+                onOpenSwitcher: { [weak self] in self?.openSwitcher() },
+                onReinstate: { [weak self] id in self?.reinstate(id) },
                 onQuit: { NSApp.terminate(nil) }
             )
         )
@@ -109,6 +118,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self else { return }
             self.state.showResponse(answer)
             self.armVoiceFollowUp()
+            self.persistCurrentChat()
         }
         // Codex is calling a tool (web search, a shell command, an Isle MCP tool):
         // show it in the pill's single tool slot; clear back to "Thinking" when it
@@ -232,7 +242,50 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         dictation.clearHistory()
         state.reset()
         state.startTurn()
+        // A fresh chat: the next answer starts a new record.
+        currentChatID = nil
+        currentChatStartedAt = nil
         if state.mode == .voice { dictation.startRecording() }
+    }
+
+    /// Open the recent-chats switcher (↑ in the empty new-chat state). No-op when
+    /// nothing's saved yet. Options are passed chronological (oldest first) so the
+    /// selection opens on the latest chat and a single ↓ exits.
+    private func openSwitcher() {
+        let options = Array(chatStore.recentSummaries(limit: 3).reversed())
+        guard !options.isEmpty else { return }
+        Log.app("chat.switcher.open", ["count": options.count])
+        state.openSwitcher(options)
+    }
+
+    /// Reinstate a saved chat: restore its transcript into the model-facing
+    /// history and its answers on screen, then continue it as the live chat so
+    /// later answers update the same record. There's no Codex session to resume —
+    /// context is carried by replaying the transcript (see `CodexClient`).
+    private func reinstate(_ id: UUID) {
+        guard let record = chatStore.record(id: id) else { state.closeSwitcher(); return }
+        dictation.loadHistory(record.turns.map {
+            CodexClient.Turn(role: $0.role == .user ? .user : .assistant, text: $0.text)
+        })
+        state.reinstate(assistantTexts: record.turns.filter { $0.role == .assistant }.map(\.text))
+        currentChatID = record.id
+        currentChatStartedAt = record.startedAt
+        Log.app("chat.reinstate")
+    }
+
+    /// Save the live chat after an answer lands (incremental, crash-safe). The
+    /// chat gets its id + start time on its first turn; later answers update it
+    /// in place. Empty conversations are never written.
+    private func persistCurrentChat() {
+        let turns = dictation.currentHistory.map {
+            StoredTurn(role: $0.role == .user ? .user : .assistant, text: $0.text)
+        }
+        guard !turns.isEmpty else { return }
+        if currentChatID == nil {
+            currentChatID = UUID()
+            currentChatStartedAt = Date()
+        }
+        chatStore.save(id: currentChatID!, startedAt: currentChatStartedAt ?? Date(), turns: turns)
     }
 
     /// After an answer is shown in voice mode, silently open the mic and run the
@@ -297,6 +350,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Log.app("idle.clear")
             self.dictation.clearHistory()
             self.state.reset()
+            // The conversation is gone; the next one starts a new record (the
+            // cleared chat stays saved and reachable via the switcher).
+            self.currentChatID = nil
+            self.currentChatStartedAt = nil
         }
     }
 
