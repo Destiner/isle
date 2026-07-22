@@ -100,7 +100,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     Log.error("mcp.start", "\(error)")
                 }
             }
-            Log.app("mcp.listening", ["port": preferences.mcpPort])
         }
 
         // Stream recognized speech into the pill as the user talks.
@@ -169,6 +168,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // conversation persists for the next open).
         fnMonitor.onToggle = { [weak self] in
             guard let self else { return }
+            // Breadcrumb for "did the fn trigger even fire?" — this line's absence
+            // in app.jsonl means the global monitor never delivered the tap.
+            Log.app("fn.toggle", ["open": self.state.isOpen, "hasHistory": self.state.hasHistory])
             if self.state.isOpen {
                 if self.state.mode == .voice { self.dictation.cancelRecording() }
                 self.hide()
@@ -308,6 +310,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // or visually defocusing the frontmost app.
         panel.makeKeyAndOrderFront(nil)
         state.isOpen = true
+        // `key` distinguishes the two failure shapes: key but not visible → a
+        // compositing/placement issue; not key → makeKeyAndOrderFront was refused.
+        Log.app("show", ["mode": state.mode.rawValue, "key": panel.isKeyWindow])
     }
 
     /// Send the typed message to Codex. Ignored while Codex is thinking or when
@@ -328,6 +333,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func hide() {
+        Log.app("hide")
         state.isOpen = false
         armIdleTimer()
         // Keep the panel on screen until the collapse animation finishes, then
