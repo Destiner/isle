@@ -75,9 +75,35 @@ actor MCPHTTPServer {
             }
             .childChannelOption(ChannelOptions.socketOption(.so_reuseaddr), value: 1)
 
-        let channel = try await bootstrap.bind(host: host, port: port).get()
+        let channel = try await bindWithRetry(bootstrap)
         self.channel = channel
+        Log.app("mcp.listening", ["port": port])
         try await channel.closeFuture.get()
+    }
+
+    /// Bind, retrying briefly on "address already in use". A quick relaunch can
+    /// race the previous instance's shutdown, which still holds the listening
+    /// socket for a moment — and `SO_REUSEADDR` (set above) only covers a socket
+    /// in `TIME_WAIT`, not one a live process is still bound to. So back off and
+    /// retry a few times; the old process releases the port as it exits.
+    private func bindWithRetry(_ bootstrap: ServerBootstrap,
+                               attempts: Int = 10,
+                               delay: Duration = .milliseconds(300)) async throws -> Channel {
+        for attempt in 1...attempts {
+            do {
+                return try await bootstrap.bind(host: host, port: port).get()
+            } catch {
+                guard Self.isAddressInUse(error), attempt < attempts else { throw error }
+                Log.app("mcp.bind.retry", ["attempt": attempt, "port": port])
+                try? await Task.sleep(for: delay)
+            }
+        }
+        // Unreachable: the loop either returns a channel or throws on the last attempt.
+        fatalError("bindWithRetry exited its loop")
+    }
+
+    private static func isAddressInUse(_ error: Error) -> Bool {
+        (error as? IOError)?.errnoCode == EADDRINUSE
     }
 
     /// Routes a request to its session's transport, creating a session on `initialize`.
