@@ -309,9 +309,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // monitor. As a non-activating panel it does this without activating Isle
         // or visually defocusing the frontmost app.
         panel.makeKeyAndOrderFront(nil)
+        // macOS 26 ignores this panel's `.canJoinAllSpaces` (verified live: the flag
+        // is set but the WindowServer pins the window to the Space it was created on),
+        // so fn on another desktop steals focus but renders the pill back on the
+        // origin Space. Explicitly move it onto the active Space on every show — the
+        // one thing proven to unstick it (see PillPanel.moveToActiveSpace).
+        panel.moveToActiveSpace()
         state.isOpen = true
         // `key` distinguishes the two failure shapes: key but not visible → a
-        // compositing/placement issue; not key → makeKeyAndOrderFront was refused.
+        // Space/compositing issue; not key → makeKeyAndOrderFront was refused.
         Log.app("show", ["mode": state.mode.rawValue, "key": panel.isKeyWindow])
     }
 
