@@ -214,7 +214,7 @@ struct CodexClient {
             if data.isEmpty {
                 // EOF: tear the source down so it doesn't busy-spin firing on the
                 // closed pipe (a FileHandle quirk that pegs a core and starves the
-                // audio/endpoint timing — which killed the voice follow-up turn).
+                // main thread — which stalled the UI mid-turn).
                 handle.readabilityHandler = nil
                 return
             }
@@ -245,8 +245,7 @@ struct CodexClient {
                 // The readability handler has already drained the stream, so just
                 // tear it down and use what it accumulated. Do NOT readDataToEndOfFile
                 // here: the parent's write end may still be open, so that read can
-                // block indefinitely — hanging the turn at "Thinking" and (in voice)
-                // never re-arming the follow-up mic.
+                // block indefinitely — hanging the turn at "Thinking" forever.
                 outputPipe.fileHandleForReading.readabilityHandler = nil
                 let events = stream.snapshotTail()
 

@@ -12,7 +12,7 @@ import Foundation
 ///
 /// Two write targets: a single always-open `app.jsonl` for app-scoped events
 /// (launch, MCP/ASR, idle-clear) and one `<stamp>-<id>.jsonl` per conversation
-/// for turn/codex/tool/voice events. The conversation file is swapped on
+/// for turn/codex/tool events. The conversation file is swapped on
 /// `beginConversation`; nothing is deleted or rotated.
 final class LogWriter: @unchecked Sendable {
     static let shared = LogWriter()

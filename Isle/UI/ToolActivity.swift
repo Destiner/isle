@@ -85,10 +85,10 @@ struct ToolActivityRow: View {
 }
 
 /// A status affordance styled to match the tool rows so they share one visual
-/// language: an animated SF Symbol + label. Used for "Thinking" and "Listening".
-/// `animating` gates the symbol effect — it must be off when the row isn't the
-/// live focus (idle, or the mic merely armed) so the continuous animation doesn't
-/// peg the main thread and starve the main-actor voice loops.
+/// language: an animated SF Symbol + label. Used for "Thinking". `animating`
+/// gates the symbol effect — it must be off when the row isn't the live focus
+/// (e.g. the pill is closed) so the continuous animation doesn't peg the main
+/// thread.
 struct StatusRow: View {
     var icon: String
     var label: String

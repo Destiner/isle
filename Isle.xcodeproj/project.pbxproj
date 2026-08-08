@@ -7,7 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		FA1D0000000000000000AA03 /* FluidAudio in Frameworks */ = {isa = PBXBuildFile; productRef = FA1D0000000000000000AA02 /* FluidAudio */; };
 		AABB0000000000000000AA03 /* MCP in Frameworks */ = {isa = PBXBuildFile; productRef = AABB0000000000000000AA02 /* MCP */; };
 		AACC0000000000000000AA03 /* NIOCore in Frameworks */ = {isa = PBXBuildFile; productRef = AACC0000000000000000AA02 /* NIOCore */; };
 		AACC0000000000000000AA05 /* NIOPosix in Frameworks */ = {isa = PBXBuildFile; productRef = AACC0000000000000000AA04 /* NIOPosix */; };
@@ -60,7 +59,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				FA1D0000000000000000AA03 /* FluidAudio in Frameworks */,
 				AABB0000000000000000AA03 /* MCP in Frameworks */,
 				AACC0000000000000000AA03 /* NIOCore in Frameworks */,
 				AACC0000000000000000AA05 /* NIOPosix in Frameworks */,
@@ -125,7 +123,6 @@
 			);
 			name = Isle;
 			packageProductDependencies = (
-				FA1D0000000000000000AA02 /* FluidAudio */,
 				AABB0000000000000000AA02 /* MCP */,
 				AACC0000000000000000AA02 /* NIOCore */,
 				AACC0000000000000000AA04 /* NIOPosix */,
@@ -214,7 +211,6 @@
 			mainGroup = 514928502FF3092900A139AE;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				FA1D0000000000000000AA01 /* XCRemoteSwiftPackageReference "FluidAudio" */,
 				AABB0000000000000000AA01 /* XCRemoteSwiftPackageReference "swift-sdk" */,
 				AACC0000000000000000AA01 /* XCRemoteSwiftPackageReference "swift-nio" */,
 			);
@@ -431,9 +427,7 @@
 				INFOPLIST_KEY_NSAppleEventsUsageDescription = "Isle controls supported apps when you ask it to.";
 				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Isle reads and edits your calendar events when you ask it to.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Isle transcribes your speech to text while you hold the fn key.";
 				INFOPLIST_KEY_NSRemindersFullAccessUsageDescription = "Isle reads and edits your reminders when you ask it to.";
-				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Isle transcribes your speech to text on-device.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -470,9 +464,7 @@
 				INFOPLIST_KEY_NSAppleEventsUsageDescription = "Isle controls supported apps when you ask it to.";
 				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Isle reads and edits your calendar events when you ask it to.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Isle transcribes your speech to text while you hold the fn key.";
 				INFOPLIST_KEY_NSRemindersFullAccessUsageDescription = "Isle reads and edits your reminders when you ask it to.";
-				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Isle transcribes your speech to text on-device.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -612,14 +604,6 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		FA1D0000000000000000AA01 /* XCRemoteSwiftPackageReference "FluidAudio" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/FluidInference/FluidAudio.git";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 0.12.4;
-			};
-		};
 		AABB0000000000000000AA01 /* XCRemoteSwiftPackageReference "swift-sdk" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/modelcontextprotocol/swift-sdk.git";
@@ -639,11 +623,6 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		FA1D0000000000000000AA02 /* FluidAudio */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = FA1D0000000000000000AA01 /* XCRemoteSwiftPackageReference "FluidAudio" */;
-			productName = FluidAudio;
-		};
 		AABB0000000000000000AA02 /* MCP */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = AABB0000000000000000AA01 /* XCRemoteSwiftPackageReference "swift-sdk" */;

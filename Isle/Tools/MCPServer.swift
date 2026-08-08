@@ -22,7 +22,7 @@ import NIOPosix
 /// across `codex exec` runs — no per-request process spawn.
 ///
 /// EventKit runs in-process here, so the Reminders TCC grant attributes to Isle's
-/// own signed identity (like the mic grant) rather than to a spawned helper.
+/// own signed identity (like the Reminders grant) rather than to a spawned helper.
 actor MCPHTTPServer {
     private let host = "127.0.0.1"
     private let port: Int

@@ -10,7 +10,7 @@ import Foundation
 /// In-process on purpose: Apple Events TCC ("Isle wants to control Mail") attributes
 /// to the process *sending* the event, so sending from Isle keeps the grant on Isle's
 /// signed identity — a spawned `osascript` would misattribute it (same reasoning as
-/// the mic/Reminders grants). `NSAppleScript` isn't thread-safe, so every script runs
+/// the Reminders grant). `NSAppleScript` isn't thread-safe, so every script runs
 /// on one dedicated serial queue; each call compiles and runs its own instance there.
 ///
 /// Data marshaling: scripts return a flat string with fields joined by US (unit

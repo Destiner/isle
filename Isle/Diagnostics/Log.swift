@@ -7,8 +7,8 @@ import Foundation
 import os
 
 /// Isle's single logging facade. Every diagnostic — Codex runs, MCP tool calls,
-/// conversation turns, voice events, lifecycle — goes through here so there's one
-/// place that decides the format, the destination, and whether logging runs.
+/// conversation turns, lifecycle — goes through here so there's one place that
+/// decides the format, the destination, and whether logging runs.
 ///
 /// **Debug-only.** In Release builds the whole thing compiles to no-ops and never
 /// touches the disk, so nothing ships in a distributed build. In Debug it's on by
@@ -96,20 +96,19 @@ enum Log {
     }
 
     /// Records a user message, opening a conversation if none is live and starting
-    /// a new turn. The single place both the voice and text paths converge on.
-    static func turnUser(source: InputMode, text: String) {
+    /// a new turn.
+    static func turnUser(text: String) {
         guard isEnabled else { return }
         beginConversation()
         let id = shortID()
         lock.lock(); currentTurn = id; lock.unlock()
         emit(.conversation, cat: "turn", event: "user", level: .info,
-             ["source": source.rawValue, "text": text, "chars": text.count])
+             ["text": text, "chars": text.count])
     }
 
     /// Records the assistant's answer, closing the turn. Events that fire between
-    /// turns (the hands-free follow-up mic arming, ASR load) then log against the
-    /// conversation with no `turn`, rather than being mis-tagged to the one that
-    /// just ended.
+    /// turns then log against the conversation with no `turn`, rather than being
+    /// mis-tagged to the one that just ended.
     static func turnAssistant(text: String) {
         guard isEnabled else { return }
         emit(.conversation, cat: "turn", event: "assistant", level: .info,
@@ -152,13 +151,6 @@ enum Log {
              level: isError ? .warn : .info,
              ["tool": name, "arguments": arguments, "isError": isError,
               "resultChars": resultChars, "durationMs": durationMs])
-    }
-
-    // MARK: - Voice
-
-    static func voice(_ event: String, level: Level = .info, _ fields: [String: Any] = [:]) {
-        guard isEnabled else { return }
-        emit(.conversation, cat: "voice", event: event, level: level, fields)
     }
 
     // MARK: - App lifecycle

@@ -40,10 +40,10 @@ struct LogLineTests {
     @Test func convAndTurnIncludedWhenSet() {
         let obj = parse(Log.jsonLine(
             cat: "turn", event: "user", level: .info, timestamp: "t",
-            conv: "c1", turn: "t3", fields: ["source": "voice", "chars": 12]))
+            conv: "c1", turn: "t3", fields: ["text": "hello", "chars": 12]))
         #expect(obj["conv"] as? String == "c1")
         #expect(obj["turn"] as? String == "t3")
-        #expect(obj["source"] as? String == "voice")
+        #expect(obj["text"] as? String == "hello")
         #expect(obj["chars"] as? Int == 12)
     }
 
@@ -59,7 +59,7 @@ struct LogLineTests {
         // Envelope keys win over caller fields (set last), so a stray "level"
         // field can't corrupt the level.
         let obj = parse(Log.jsonLine(
-            cat: "voice", event: "endpoint", level: .warn, timestamp: "t",
+            cat: "tool", event: "call", level: .warn, timestamp: "t",
             conv: nil, turn: nil, fields: ["level": "sneaky"]))
         #expect(obj["level"] as? String == "warn")
     }
