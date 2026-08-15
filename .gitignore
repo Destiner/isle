@@ -4,6 +4,10 @@ build/
 *.xcuserstate
 xcuserdata/
 
+# Swift Package Manager
+.build/
+.swiftpm/
+
 # Profiling / coverage artifacts
 *.profraw
 
