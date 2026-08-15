@@ -105,7 +105,13 @@ struct AgentEngine {
                 model: openRouter,
                 system: "\(systemPrompt)\n\n\(Harness.toolGuidance)",
                 toolProviders: [StaticToolProvider(Harness.tools() + tools)],
-                cwd: cwd))
+                cwd: cwd,
+                // Generous on purpose. A browser flow chains a lot of small
+                // steps (navigate → read → click → read → type → …), and the
+                // old `codex exec` path had no step cap at all, so a tight limit
+                // here would fail requests that used to work. `timeout` is the
+                // real backstop; this only catches a model looping forever.
+                maxIterations: 48))
         self.timeout = timeout
     }
 
