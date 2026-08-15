@@ -14,7 +14,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // All tunable behavior lives here (defaults for now; the seam for a future
     // settings UI). Shared with the pieces that read it.
     private let preferences = Preferences()
-    private lazy var conversation = Conversation(preferences: preferences)
+    private lazy var conversation = Conversation(
+        preferences: preferences, tools: IsleToolSet.tools(from: toolProviders))
 
     // Persists recent chats so ↑ in the empty new-chat state can switch between
     // them. `currentChatID` tracks the live chat so each answer upserts the same
@@ -23,8 +24,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var currentChatID: UUID?
     private var currentChatStartedAt: Date?
 
-    // Hosts Isle's reminder + mail tools as a localhost MCP server for Codex to call.
-    private var mcpServer: MCPHTTPServer?
+    // Isle's own tools, built once and handed to the agent. Each provider is
+    // present only when its preference is on; the services themselves request
+    // their system permissions lazily on first use, so constructing them here
+    // triggers no TCC prompts.
+    private lazy var toolProviders = IsleToolSet.Providers(
+        reminders: preferences.enableReminderTools
+            ? ReminderTools(service: RemindersService()) : nil,
+        calendar: preferences.enableCalendarTools
+            ? CalendarTools(service: CalendarService()) : nil,
+        notes: preferences.enableNotesTools ? NotesTools(service: NotesService()) : nil,
+        music: preferences.enableMusicTools ? MusicTools(service: MusicService()) : nil,
+        mail: preferences.enableMailTools
+            ? MailTools(service: MailService(provider: preferences.makeMailProvider())) : nil,
+        browser: preferences.enableBrowserTools
+            ? BrowserTools(
+                service: BrowserService(
+                    port: preferences.chromeDebuggingPort,
+                    headless: preferences.chromeHeadless)) : nil)
 
     // The conversation is cleared after the pill sits closed past
     // `preferences.idleTimeout`. Armed on hide, cancelled on show.
@@ -69,34 +86,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel.setContentSize(panelSize)
         self.panel = panel
 
-        // Bring up the MCP tool server so Codex can act on Reminders, Calendar, and Mail. Runs
-        // for the app's lifetime; `start()` serves until the process exits, so detach.
-        if preferences.enableReminderTools || preferences.enableCalendarTools || preferences.enableNotesTools || preferences.enableMusicTools || preferences.enableMailTools || preferences.enableBrowserTools {
-            let server = MCPHTTPServer(
-                port: preferences.mcpPort,
-                reminders: preferences.enableReminderTools ? RemindersService() : nil,
-                calendar: preferences.enableCalendarTools ? CalendarService() : nil,
-                notes: preferences.enableNotesTools ? NotesService() : nil,
-                music: preferences.enableMusicTools ? MusicService() : nil,
-                mail: preferences.enableMailTools ? MailService(provider: preferences.makeMailProvider()) : nil,
-                browser: preferences.enableBrowserTools ? BrowserService(port: preferences.chromeDebuggingPort, headless: preferences.chromeHeadless) : nil)
-            mcpServer = server
-            Task.detached {
-                do {
-                    try await server.start()
-                } catch {
-                    Log.error("mcp.start", "\(error)")
-                }
-            }
-        }
-
-        // Codex answered → show it in the pill (stays open until the next fn-tap).
+        // The agent answered → show it in the pill (stays open until the next fn-tap).
         conversation.onResponse = { [weak self] answer in
             guard let self else { return }
             self.state.showResponse(answer)
             self.persistCurrentChat()
         }
-        // Codex is calling a tool (web search, a shell command, an Isle MCP tool):
+        // The agent is calling a tool (web search, a shell command, one of Isle's own):
         // show it in the pill's single tool slot; clear back to "Thinking" when it
         // finishes (no next tool yet). A new answer clears it via showResponse.
         conversation.onToolEvent = { [weak self] event in
@@ -169,12 +165,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Reinstate a saved chat: restore its transcript into the model-facing
     /// history and its answers on screen, then continue it as the live chat so
-    /// later answers update the same record. There's no Codex session to resume —
-    /// context is carried by replaying the transcript (see `CodexClient`).
+    /// later answers update the same record. There's no server-side session to
+    /// resume — context is carried by replaying the transcript.
     private func reinstate(_ id: UUID) {
         guard let record = chatStore.record(id: id) else { state.closeSwitcher(); return }
         conversation.loadHistory(record.turns.map {
-            CodexClient.Turn(role: $0.role == .user ? .user : .assistant, text: $0.text)
+            Conversation.Turn(role: $0.role == .user ? .user : .assistant, text: $0.text)
         })
         state.reinstate(assistantTexts: record.turns.filter { $0.role == .assistant }.map(\.text))
         currentChatID = record.id

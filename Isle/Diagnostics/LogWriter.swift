@@ -7,7 +7,7 @@ import Foundation
 
 /// Serial file appender behind `Log`. Owns the log directory and file handles and
 /// does every write on one private queue, so callers from any thread/actor
-/// (`CodexClient` off-main, `ReminderTools` nonisolated, the main actor) can hand
+/// (the agent loop off-main, `ReminderTools` nonisolated, the main actor) can hand
 /// it finished JSONL lines without interleaving or locking themselves.
 ///
 /// Two write targets: a single always-open `app.jsonl` for app-scoped events

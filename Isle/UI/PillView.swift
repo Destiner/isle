@@ -45,7 +45,7 @@ final class IslandState: ObservableObject {
     /// behaves like any response — it stays on screen, ready for a retry.
     @Published private(set) var isError = false
     /// The tool/MCP call currently shown while Codex works (icon + label), fed by
-    /// `CodexClient`'s `--json` event stream via `beginTool`/`endTool`. A single
+    /// the agent's turn events via `beginTool`/`endTool`. A single
     /// slot, so a new call replaces (and rolls over) the prior one rather than
     /// stacking; nil when nothing's running, so the pill falls back to the plain
     /// "Thinking" row. Changes are debounced through `setTool` (min-display gate)

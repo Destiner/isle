@@ -116,32 +116,30 @@ enum Log {
         lock.lock(); currentTurn = nil; lock.unlock()
     }
 
-    // MARK: - Codex
+    // MARK: - Model
 
-    static func codexRequest(model: String, effort: String, historyTurns: Int, prompt: String) {
+    static func modelRequest(model: String, thinking: String, historyTurns: Int, prompt: String) {
         guard isEnabled else { return }
-        emit(.conversation, cat: "codex", event: "request", level: .info,
-             ["model": model, "effort": effort, "historyTurns": historyTurns,
+        emit(.conversation, cat: "model", event: "request", level: .info,
+             ["model": model, "thinking": thinking, "historyTurns": historyTurns,
               "promptChars": prompt.count, "prompt": prompt])
     }
 
-    static func codexResponse(chars: Int, durationMs: Int) {
+    static func modelResponse(chars: Int, durationMs: Int) {
         guard isEnabled else { return }
-        emit(.conversation, cat: "codex", event: "response", level: .info,
+        emit(.conversation, cat: "model", event: "response", level: .info,
              ["chars": chars, "durationMs": durationMs])
     }
 
-    static func codexError(_ kind: String, exitCode: Int32? = nil, stderr: String? = nil,
-                           events: String? = nil, durationMs: Int) {
+    /// `kind` is the display case the pill showed; `detail` is the underlying
+    /// error, which is logged but never shown.
+    static func modelError(_ kind: String, detail: String, durationMs: Int) {
         guard isEnabled else { return }
-        var fields: [String: Any] = ["kind": kind, "durationMs": durationMs]
-        if let exitCode { fields["exitCode"] = Int(exitCode) }
-        if let stderr, !stderr.isEmpty { fields["stderr"] = stderr }
-        if let events, !events.isEmpty { fields["events"] = events }
-        emit(.conversation, cat: "codex", event: "error", level: .error, fields)
+        emit(.conversation, cat: "model", event: "error", level: .error,
+             ["kind": kind, "detail": detail, "durationMs": durationMs])
     }
 
-    // MARK: - Tools (MCP)
+    // MARK: - Tools
 
     /// `arguments` is a Foundation JSON object (dict/array/scalar), embedded as a
     /// nested object so it stays queryable (`jq '.arguments.query'`).

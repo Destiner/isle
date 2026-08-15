@@ -116,65 +116,8 @@ private struct MCPTool: Tool {
     var inputSchema: JSONValue { schema }
 
     func execute(_ input: JSONValue, context: ToolContext) async throws -> String {
-        let arguments = (input.objectValue ?? [:]).mapValues { $0.mcpValue }
-        let (content, isError) = try await client.callTool(
-            name: remoteName, arguments: arguments)
-
-        let text =
-            content.compactMap { item -> String? in
-                switch item {
-                case .text(let text, _, _):
-                    return text
-                case .image(_, let mimeType, _, _):
-                    return "(image: \(mimeType))"
-                case .audio(_, let mimeType, _, _):
-                    return "(audio: \(mimeType))"
-                case .resource(let resource, _, _):
-                    return "(resource: \(resource))"
-                case .resourceLink(let uri, let name, _, _, _, _):
-                    return "(resource link: \(name) — \(uri))"
-                }
-            }.joined(separator: "\n")
-
-        // The server reported failure in-band; hand it back as text so the model
-        // can react rather than throwing and ending the turn.
-        if isError == true {
-            return "Error: \(text.isEmpty ? "the tool reported a failure." : text)"
-        }
-        return text.isEmpty ? "(no output)" : text
-    }
-}
-
-// MARK: - Value bridging
-
-extension JSONValue {
-    init(mcp value: MCP.Value) {
-        switch value {
-        case .null: self = .null
-        case .bool(let inner): self = .bool(inner)
-        case .int(let inner): self = .number(Double(inner))
-        case .double(let inner): self = .number(inner)
-        case .string(let inner): self = .string(inner)
-        case .data(_, let inner): self = .string(inner.base64EncodedString())
-        case .array(let inner): self = .array(inner.map { JSONValue(mcp: $0) })
-        case .object(let inner): self = .object(inner.mapValues { JSONValue(mcp: $0) })
-        }
-    }
-
-    var mcpValue: MCP.Value {
-        switch self {
-        case .null: return .null
-        case .bool(let inner): return .bool(inner)
-        case .number(let inner):
-            // Keep whole numbers integral: a server whose schema says "integer"
-            // will reject 10.0 where it accepts 10.
-            if inner.rounded() == inner, inner.magnitude < 9.007e15 {
-                return .int(Int(inner))
-            }
-            return .double(inner)
-        case .string(let inner): return .string(inner)
-        case .array(let inner): return .array(inner.map(\.mcpValue))
-        case .object(let inner): return .object(inner.mapValues(\.mcpValue))
-        }
+        let arguments = (input.objectValue ?? [:]).mapValues(\.mcpValue)
+        let result = try await client.callTool(name: remoteName, arguments: arguments)
+        return MCPBridge.output(content: result.content, isError: result.isError)
     }
 }

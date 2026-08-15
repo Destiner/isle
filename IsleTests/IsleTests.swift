@@ -5,62 +5,96 @@
 //  Created by Timur Badretdinov on 29/06/2026.
 //
 
+import Foundation
+import Roboport
 import Testing
+
 @testable import Isle
 
-/// Covers `CodexClient.CodexError.classify` — the stderr/exit-code mapping that
-/// turns a failed `codex exec` run into a short display case. Fixtures are real
-/// or representative Codex output; the ordering test guards against the broad
-/// `model` check swallowing more specific failures.
-struct CodexErrorClassifyTests {
-    typealias E = CodexClient.CodexError
+/// Covers `AgentEngine.EngineError.classify` — the mapping that turns a failed
+/// turn into the short line the pill shows. The pill has one line and no way to
+/// ask a question, so a wrong mapping is the difference between "API key
+/// rejected" (actionable) and "Something went wrong" (not).
+struct EngineErrorClassifyTests {
+    typealias E = AgentEngine.EngineError
 
-    @Test func usageLimit() {
-        #expect(E.classify(exitCode: 1, stderr:
-            "ERROR: You've hit your usage limit. Try again at 10:04 PM.") == .usageLimit)
-        #expect(E.classify(exitCode: 1, stderr: "429 Too Many Requests") == .usageLimit)
+    @Test func authFailuresAreDistinctFromBilling() {
+        #expect(E.classify(ModelError.http(status: 401, body: "")) == .notAuthorized)
+        #expect(E.classify(ModelError.http(status: 403, body: "")) == .notAuthorized)
+        // 402 and 429 both mean "the key is fine, you just can't spend right now".
+        #expect(E.classify(ModelError.http(status: 402, body: "")) == .usageLimit)
+        #expect(E.classify(ModelError.http(status: 429, body: "")) == .usageLimit)
     }
 
-    @Test func notAuthenticated() {
-        #expect(E.classify(exitCode: 1, stderr: "Not logged in. Run `codex login`.")
-            == .notAuthenticated)
-        #expect(E.classify(exitCode: 1, stderr: "401 Unauthorized") == .notAuthenticated)
+    @Test func serverFaultsReadAsUnreachable() {
+        #expect(E.classify(ModelError.http(status: 500, body: "")) == .serviceUnavailable)
+        #expect(E.classify(ModelError.http(status: 503, body: "")) == .serviceUnavailable)
+        // A stream that stops mid-answer is a transport fault, not a bad request.
+        #expect(E.classify(ModelError.truncatedStream) == .serviceUnavailable)
     }
 
-    @Test func notInstalled() {
-        #expect(E.classify(exitCode: 127, stderr: "") == .notInstalled)
-        #expect(E.classify(exitCode: 1, stderr: "zsh: command not found: codex")
-            == .notInstalled)
+    @Test func unclassifiedHTTPFallsBackToFailed() {
+        #expect(E.classify(ModelError.http(status: 400, body: "")) == .failed)
+        #expect(E.classify(ModelError.http(status: 404, body: "")) == .failed)
+        #expect(E.classify(ModelError.invalidResponse("nonsense")) == .failed)
     }
 
-    @Test func modelUnavailable() {
-        // Verbatim stderr from `codex exec -c model=bogus` on a ChatGPT account.
-        let real = """
-            model: bogus-model-xyz
-            warning: Model metadata for `bogus-model-xyz` not found. Defaulting to fallback metadata; this can degrade performance and cause issues.
-            ERROR: {"type":"error","status":400,"error":{"type":"invalid_request_error","message":"The 'bogus-model-xyz' model is not supported when using Codex with a ChatGPT account."}}
-            """
-        #expect(E.classify(exitCode: 1, stderr: real) == .modelUnavailable)
+    @Test func runawayToolLoopsReadAsATimeout() {
+        // Both mean "it never got to an answer", which is what the user sees.
+        #expect(E.classify(AgentError.iterationLimit(16)) == .timedOut)
+        #expect(E.classify(CancellationError()) == .timedOut)
     }
 
-    @Test func serviceUnavailable() {
-        #expect(E.classify(exitCode: 1, stderr: "error sending request: connection timed out")
-            == .serviceUnavailable)
-        #expect(E.classify(exitCode: 1, stderr: "503 Service Unavailable") == .serviceUnavailable)
+    @Test func anUnknownToolIsAnInternalFault() {
+        #expect(E.classify(AgentError.unknownTool("nope")) == .failed)
     }
 
-    @Test func unrecognizedFallsBackToFailed() {
-        #expect(E.classify(exitCode: 1, stderr: "some unexpected panic") == .failed)
+    @Test func anEngineErrorPassesThroughUnchanged() {
+        #expect(E.classify(E.notConfigured) == .notConfigured)
+        #expect(E.classify(E.emptyResponse) == .emptyResponse)
     }
 
-    @Test func bannerModelLineIsNotAModelError() {
-        // The startup banner always prints `model: …`; on its own that must not
-        // read as a model failure, and a usage limit alongside it still wins.
-        let stderr = """
-            OpenAI Codex v0.142.5
-            model: gpt-5.5
-            ERROR: You've hit your usage limit.
-            """
-        #expect(E.classify(exitCode: 1, stderr: stderr) == .usageLimit)
+    @Test func unrecognisedErrorsDegradeToFailed() {
+        struct Weird: Error {}
+        #expect(E.classify(Weird()) == .failed)
+    }
+
+    @Test func everyCaseHasADisplayString() {
+        let cases: [E] = [
+            .notConfigured, .notAuthorized, .usageLimit, .serviceUnavailable,
+            .timedOut, .emptyResponse, .failed,
+        ]
+        for value in cases {
+            #expect(value.errorDescription?.isEmpty == false)
+        }
+    }
+}
+
+/// The bridge that exposes Isle's MCP-declared tools to the agent in-process.
+struct IsleToolBridgeTests {
+    @Test func wrapsEveryDeclaredToolWithItsSchema() {
+        let tools = ReminderTools(service: RemindersService()).agentTools()
+        #expect(tools.count == ReminderTools.tools.count)
+
+        let names = Set(tools.map(\.name))
+        #expect(names == Set(ReminderTools.tools.map(\.name)))
+
+        // The schema has to survive the bridge, or the model calls tools blind.
+        let search = tools.first { $0.name == "search_reminders" }
+        #expect(search?.inputSchema["type"]?.stringValue == "object")
+        #expect(search?.inputSchema["properties"]?["query"] != nil)
+    }
+
+    @Test func disabledProvidersContributeNoTools() {
+        #expect(IsleToolSet.tools(from: IsleToolSet.Providers()).isEmpty)
+    }
+
+    @Test func enabledProvidersAreMerged() {
+        let providers = IsleToolSet.Providers(
+            reminders: ReminderTools(service: RemindersService()),
+            notes: NotesTools(service: NotesService()))
+        let names = Set(IsleToolSet.tools(from: providers).map(\.name))
+        #expect(names.isSuperset(of: Set(ReminderTools.tools.map(\.name))))
+        #expect(names.isSuperset(of: Set(NotesTools.tools.map(\.name))))
     }
 }

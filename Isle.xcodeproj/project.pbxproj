@@ -8,9 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		AABB0000000000000000AA03 /* MCP in Frameworks */ = {isa = PBXBuildFile; productRef = AABB0000000000000000AA02 /* MCP */; };
-		AACC0000000000000000AA03 /* NIOCore in Frameworks */ = {isa = PBXBuildFile; productRef = AACC0000000000000000AA02 /* NIOCore */; };
-		AACC0000000000000000AA05 /* NIOPosix in Frameworks */ = {isa = PBXBuildFile; productRef = AACC0000000000000000AA04 /* NIOPosix */; };
-		AACC0000000000000000AA07 /* NIOHTTP1 in Frameworks */ = {isa = PBXBuildFile; productRef = AACC0000000000000000AA06 /* NIOHTTP1 */; };
+		AADD0000000000000000AA03 /* Roboport in Frameworks */ = {isa = PBXBuildFile; productRef = AADD0000000000000000AA02 /* Roboport */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -60,9 +58,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				AABB0000000000000000AA03 /* MCP in Frameworks */,
-				AACC0000000000000000AA03 /* NIOCore in Frameworks */,
-				AACC0000000000000000AA05 /* NIOPosix in Frameworks */,
-				AACC0000000000000000AA07 /* NIOHTTP1 in Frameworks */,
+				AADD0000000000000000AA03 /* Roboport in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -124,9 +120,7 @@
 			name = Isle;
 			packageProductDependencies = (
 				AABB0000000000000000AA02 /* MCP */,
-				AACC0000000000000000AA02 /* NIOCore */,
-				AACC0000000000000000AA04 /* NIOPosix */,
-				AACC0000000000000000AA06 /* NIOHTTP1 */,
+				AADD0000000000000000AA02 /* Roboport */,
 			);
 			productName = Isle;
 			productReference = 514928592FF3092900A139AE /* Isle.app */;
@@ -150,6 +144,8 @@
 			);
 			name = IsleTests;
 			packageProductDependencies = (
+				AADD0000000000000000AA04 /* Roboport */,
+				AABB0000000000000000AA04 /* MCP */,
 			);
 			productName = IsleTests;
 			productReference = 514928682FF3092D00A139AE /* IsleTests.xctest */;
@@ -212,7 +208,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				AABB0000000000000000AA01 /* XCRemoteSwiftPackageReference "swift-sdk" */,
-				AACC0000000000000000AA01 /* XCRemoteSwiftPackageReference "swift-nio" */,
+				AADD0000000000000000AA01 /* XCLocalSwiftPackageReference "Packages/Roboport" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 5149285A2FF3092900A139AE /* Products */;
@@ -603,6 +599,13 @@
 		};
 /* End XCConfigurationList section */
 
+/* Begin XCLocalSwiftPackageReference section */
+		AADD0000000000000000AA01 /* XCLocalSwiftPackageReference "Packages/Roboport" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/Roboport;
+		};
+/* End XCLocalSwiftPackageReference section */
+
 /* Begin XCRemoteSwiftPackageReference section */
 		AABB0000000000000000AA01 /* XCRemoteSwiftPackageReference "swift-sdk" */ = {
 			isa = XCRemoteSwiftPackageReference;
@@ -610,14 +613,6 @@
 			requirement = {
 				kind = exactVersion;
 				version = 0.12.1;
-			};
-		};
-		AACC0000000000000000AA01 /* XCRemoteSwiftPackageReference "swift-nio" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/apple/swift-nio.git";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 2.65.0;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
@@ -628,20 +623,18 @@
 			package = AABB0000000000000000AA01 /* XCRemoteSwiftPackageReference "swift-sdk" */;
 			productName = MCP;
 		};
-		AACC0000000000000000AA02 /* NIOCore */ = {
+		AADD0000000000000000AA02 /* Roboport */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = AACC0000000000000000AA01 /* XCRemoteSwiftPackageReference "swift-nio" */;
-			productName = NIOCore;
+			productName = Roboport;
 		};
-		AACC0000000000000000AA04 /* NIOPosix */ = {
+		AADD0000000000000000AA04 /* Roboport */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = AACC0000000000000000AA01 /* XCRemoteSwiftPackageReference "swift-nio" */;
-			productName = NIOPosix;
+			productName = Roboport;
 		};
-		AACC0000000000000000AA06 /* NIOHTTP1 */ = {
+		AABB0000000000000000AA04 /* MCP */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = AACC0000000000000000AA01 /* XCRemoteSwiftPackageReference "swift-nio" */;
-			productName = NIOHTTP1;
+			package = AABB0000000000000000AA01 /* XCRemoteSwiftPackageReference "swift-sdk" */;
+			productName = MCP;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

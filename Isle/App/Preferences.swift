@@ -4,6 +4,7 @@
 //
 
 import Foundation
+import Roboport
 
 /// Which backend the mail tools run against. `.appleMail` drives Mail.app over
 /// AppleScript (fronts every configured account, works offline, but slow — ~10
@@ -18,7 +19,7 @@ enum MailBackend: String {
 /// compile-time defaults for personal use; the struct is the seam a future
 /// settings UI (or a `UserDefaults`-backed store) can hang off — build the
 /// controls, mutate a `Preferences` value, and hand it to the pieces that read
-/// it (`AppDelegate`, `Conversation`, `CodexClient`).
+/// it (`AppDelegate`, `Conversation`, `AgentEngine`).
 struct Preferences {
 
     // MARK: - General
@@ -27,39 +28,29 @@ struct Preferences {
     /// the next open starts fresh.
     var idleTimeout: TimeInterval = 5 * 60
 
-    /// Write structured debug logs (Codex runs, tool calls, turns) to
+    /// Write structured debug logs (model turns, tool calls) to
     /// `~/Library/Application Support/Isle/logs/`. Debug builds only — the whole
     /// logging path compiles out of Release. The `ISLE_LOG` env var (`0`/`1`)
     /// overrides this per-launch. See `Log`.
     var enableLogging: Bool = true
 
-    // MARK: - Codex
+    // MARK: - Model
 
-    /// `model_reasoning_effort` passed to `codex exec`. Medium balances snappy
-    /// quick Q&A against enough deliberation to discover and chain tools (e.g.
-    /// multi-step browser flows); drop to `low` for pure speed, raise for harder tasks.
-    var reasoningEffort: String = "medium"
+    /// Reasoning effort for the turn. Medium balances snappy Q&A against enough
+    /// deliberation to discover and chain tools (e.g. multi-step browser flows);
+    /// drop to `low` for pure speed, raise for harder tasks.
+    ///
+    /// Note that `gpt-5.6-luna` spends zero reasoning tokens on some turns even
+    /// at medium, and does so nondeterministically — an answer that arrives with
+    /// no visible deliberation is not a sign this setting is being ignored.
+    var thinking: ThinkingLevel = .medium
 
-    /// Model `codex exec` runs. Isle uses its own isolated `CODEX_HOME` so your
-    /// personal `~/.codex/AGENTS.md` and `config.toml` don't leak into Isle's
-    /// answers — which also means the model is set here, not inherited from
-    /// `~/.codex/config.toml`.
-    var codexModel: String = "gpt-5.5"
+    /// The model Isle runs, as an OpenRouter `author/slug`.
+    var model: String = "openai/gpt-5.6-luna"
 
-    /// Grant Codex general-purpose computer access: run its shell commands
-    /// unsandboxed with no approval prompts (`--dangerously-bypass-approvals-and-sandbox`),
-    /// so requests can open apps, launch files, and drive the machine. When
-    /// off, Codex runs under a `workspace-write` seatbelt sandbox with approvals
-    /// disabled — it can still run commands and write to its scratch dir, but can't
-    /// send Apple Events to other apps (no controlling Music/Finder/etc.) or launch
-    /// apps via LaunchServices. Isle's own Mail/Reminders tools are unaffected either
-    /// way (they run in-process, not as sandboxed Codex subprocesses). Trade-off when
-    /// on: a careless request runs with full access under Isle's identity.
-    var computerAccess: Bool = true
-
-    /// Isle's system prompt. Written to the isolated `CODEX_HOME`'s `AGENTS.md`,
-    /// it replaces the personal dev instructions Codex would otherwise load —
-    /// tuned for short conversational answers rather than an agentic coding session.
+    /// Isle's system prompt, sent as the system message each turn. Tool-use
+    /// guidance is appended by the engine, so this stays pure persona — tuned
+    /// for short conversational answers rather than an agentic coding session.
     var systemPrompt: String = """
         You are Isle, an assistant living in a small pill on the user's Mac. \
         The user types a short request and reads your reply.
@@ -81,34 +72,32 @@ struct Preferences {
         search_music_library/list_music_playlists).
         """
 
-    /// Hard cap on a single `codex exec` run. If Codex hasn't finished within this,
-    /// Isle kills the process (and its children) and surfaces a timeout instead of
-    /// leaving the pill stuck on "thinking" forever — e.g. when the model's response
-    /// stream stalls with no data and no close, which fires no timeout on Codex's own
-    /// side. Generous on purpose: normal quick Q&A finishes in seconds.
-    var codexTimeout: TimeInterval = 5 * 60
+    /// Hard cap on a single turn. If it hasn't finished within this, Isle
+    /// cancels the turn and surfaces a timeout rather than leaving the pill
+    /// stuck on "thinking" forever. Generous on purpose: normal quick Q&A
+    /// finishes in seconds, but a browser flow can legitimately run for minutes.
+    var turnTimeout: TimeInterval = 5 * 60
 
-    // MARK: - Tools (MCP)
+    // MARK: - Tools
 
-    /// Expose Isle's reminder tools to Codex over a localhost MCP server. When on,
-    /// Isle hosts the server and writes an `[mcp_servers.reminders]` entry into its
-    /// isolated `CODEX_HOME` config so `codex exec` can call it.
+    /// Expose Isle's reminder tools to the agent. First use asks for full
+    /// Reminders access.
     var enableReminderTools: Bool = true
 
-    /// Expose Isle's calendar tools (read/create/edit through EventKit) to Codex on
-    /// the localhost MCP server. First use asks for full Calendar access.
+    /// Expose Isle's calendar tools (read/create/edit through EventKit). First
+    /// use asks for full Calendar access.
     var enableCalendarTools: Bool = true
 
-    /// Expose Apple Notes tools through the local MCP server. Notes is controlled
-    /// in-process with AppleScript, using Isle's existing Automation permission.
+    /// Expose Apple Notes tools. Notes is controlled in-process with
+    /// AppleScript, using Isle's existing Automation permission.
     var enableNotesTools: Bool = true
 
-    /// Expose Music playback and library tools through the local MCP server.
+    /// Expose Music playback and library tools.
     var enableMusicTools: Bool = true
 
-    /// Expose Isle's mail tools (read/search/send) to Codex on the same MCP server.
-    /// `send_email` sends immediately — there is no confirmation. The backend is
-    /// chosen by `mailBackend`.
+    /// Expose Isle's mail tools (read/search/send). `send_email` sends
+    /// immediately — there is no confirmation. The backend is chosen by
+    /// `mailBackend`.
     var enableMailTools: Bool = true
 
     /// Which backend the mail tools run against (see `MailBackend`). `.fastmail`
@@ -126,8 +115,8 @@ struct Preferences {
         }
     }
 
-    /// Expose Isle's browser tools (navigate/read/click/type/evaluate/screenshot) to
-    /// Codex on the same MCP server. Drives the user's installed Chrome over CDP — no
+    /// Expose Isle's browser tools (navigate/read/click/type/evaluate/screenshot).
+    /// Drives the user's installed Chrome over CDP — no
     /// bundled browser — launching it lazily on first use against a dedicated,
     /// persistent profile under Isle's Application Support (`chrome-profile`), so
     /// automation logins survive across runs without touching everyday browsing.
@@ -143,7 +132,4 @@ struct Preferences {
     /// (`chromeHeadless = false`) to establish the session first; headless then reuses
     /// it. Public pages work headless immediately.
     var chromeHeadless: Bool = true
-
-    /// Port the in-process MCP server binds on `127.0.0.1`. Codex connects here.
-    var mcpPort: Int = 8917
 }

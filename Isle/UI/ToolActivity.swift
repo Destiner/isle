@@ -5,7 +5,7 @@
 
 import SwiftUI
 
-/// A single tool/MCP call surfaced in the pill while Codex works — an icon plus
+/// A single tool call surfaced in the pill while the agent works — an icon plus
 /// a short present-tense label ("Searching the web…"). Each tool defines its own
 /// on-screen identity via `ToolPresentation`. There's no done/failed state: only
 /// the running call is shown, and when none is running the pill shows "Thinking".
@@ -15,10 +15,10 @@ struct ToolActivity: Identifiable {
     let label: String
 }
 
-/// Maps a tool name — a Codex builtin (web search) or one of Isle's own MCP tools
-/// — to how it should read in the pill. The single seam where a tool's on-screen
-/// identity lives; when the tool-event data path lands (streaming out of
-/// `CodexClient`'s `--json` log), this is what turns a tool name into a row.
+/// Maps a tool name — the harness's `bash`/`web_search` or one of Isle's own
+/// tools — to how it should read in the pill. The single seam where a tool's
+/// on-screen identity lives; the agent's tool events carry the name, and this
+/// turns it into a row.
 enum ToolPresentation {
     static func activity(forTool name: String) -> (icon: String, label: String) {
         switch name {

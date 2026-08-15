@@ -68,3 +68,20 @@ nonisolated enum FastmailCredentials {
         return Keychain.string(account: keychainAccount)
     }
 }
+
+/// The OpenRouter key backing the agent's model. Resolved from the
+/// `ISLE_OPENROUTER_KEY` env var (dev) else the login keychain — never a
+/// committed constant, and never written into the repo.
+///
+/// Seed it once with:
+///   security add-generic-password -s DestinerLabs.Isle -a openrouter-api-key -w '<key>' -U
+nonisolated enum OpenRouterCredentials {
+    static let keychainAccount = "openrouter-api-key"
+
+    static var key: String? {
+        if let env = ProcessInfo.processInfo.environment["ISLE_OPENROUTER_KEY"], !env.isEmpty {
+            return env
+        }
+        return Keychain.string(account: keychainAccount)
+    }
+}

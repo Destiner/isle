@@ -7,7 +7,7 @@ import Foundation
 import SwiftData
 
 /// One persisted turn (user or assistant) in a saved chat. A plain Codable value
-/// stored inside `Chat.turns`; mirrors `CodexClient.Turn` but stays decoupled
+/// stored inside `Chat.turns`; mirrors `Conversation.Turn` but stays decoupled
 /// from it so the persistence layer doesn't depend on the agent layer.
 struct StoredTurn: Codable, Equatable {
     enum Role: String, Codable { case user, assistant }
@@ -16,9 +16,8 @@ struct StoredTurn: Codable, Equatable {
 }
 
 /// A saved conversation. The turns are Isle's own transcript (user + assistant
-/// text) — `codex exec` is one-shot and carries no resumable session, so
-/// reinstating a chat just means replaying this transcript back through Codex
-/// (see `CodexClient.composePrompt`). There's nothing Codex-side to restore.
+/// text) — the agent carries no resumable server-side session, so reinstating a
+/// chat just means replaying this transcript as the next turn's history.
 @Model
 final class Chat {
     @Attribute(.unique) var id: UUID
