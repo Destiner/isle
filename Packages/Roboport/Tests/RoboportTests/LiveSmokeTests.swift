@@ -16,7 +16,7 @@ final class LiveSmokeTests: XCTestCase {
 
     private func makeSession(_ key: String, cwd: String) -> Session {
         let model = OpenRouter(
-            "openai/gpt-5.6-luna", apiKey: key, thinking: .medium, title: "isle")
+            "openai/gpt-5.6-sol", apiKey: key, thinking: .low, title: "isle")
         return Session(
             config: AgentConfig(
                 model: model,

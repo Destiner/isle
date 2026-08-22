@@ -36,17 +36,13 @@ struct Preferences {
 
     // MARK: - Model
 
-    /// Reasoning effort for the turn. Medium balances snappy Q&A against enough
-    /// deliberation to discover and chain tools (e.g. multi-step browser flows);
-    /// drop to `low` for pure speed, raise for harder tasks.
-    ///
-    /// Note that `gpt-5.6-luna` spends zero reasoning tokens on some turns even
-    /// at medium, and does so nondeterministically — an answer that arrives with
-    /// no visible deliberation is not a sign this setting is being ignored.
-    var thinking: ThinkingLevel = .medium
+    /// Reasoning effort for the turn. Low favors snappy Q&A over deliberation;
+    /// raise for harder tasks that need to discover and chain tools (e.g.
+    /// multi-step browser flows).
+    var thinking: ThinkingLevel = .low
 
     /// The model Isle runs, as an OpenRouter `author/slug`.
-    var model: String = "openai/gpt-5.6-luna"
+    var model: String = "openai/gpt-5.6-sol"
 
     /// Isle's system prompt, sent as the system message each turn. Tool-use
     /// guidance is appended by the engine, so this stays pure persona — tuned
