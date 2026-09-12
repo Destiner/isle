@@ -6,9 +6,10 @@ struct ManuscriptView: View {
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var conversation = MobileConversation()
     @State private var draft = ""
-    @State private var isComposerFocused = true
+    @State private var isComposerFocused = false
     @State private var followsLatestResponse = true
     @State private var isConversationVisible = false
+    @State private var followUpStartY: CGFloat?
 
     var body: some View {
         Group {
@@ -47,6 +48,11 @@ struct ManuscriptView: View {
                                 fontSize: 20,
                                 onSubmit: submit
                             )
+                            .onGeometryChange(for: CGFloat.self) { geometry in
+                                geometry.frame(in: .named("manuscript")).minY
+                            } action: { _, minY in
+                                followUpStartY = minY
+                            }
 
                             Color.clear
                                 .frame(height: 36)
@@ -87,14 +93,24 @@ struct ManuscriptView: View {
                 }
             }
         }
+        .coordinateSpace(.named("manuscript"))
         .contentShape(Rectangle())
-        .onTapGesture {
-            isComposerFocused = false
-        }
+        .simultaneousGesture(
+            SpatialTapGesture(coordinateSpace: .named("manuscript"))
+                .onEnded { tap in
+                    if conversation.turns.isEmpty {
+                        isComposerFocused = true
+                    } else if let followUpStartY,
+                              tap.location.y >= followUpStartY {
+                        isComposerFocused = true
+                    } else {
+                        isComposerFocused = false
+                    }
+                }
+        )
         .background(Color.black.ignoresSafeArea())
         .opacity(scenePhase == .active && isConversationVisible ? 1 : 0)
         .background(Color.black.ignoresSafeArea())
-        .onAppear { isComposerFocused = true }
         .onChange(of: scenePhase, initial: true) { _, phase in
             guard phase == .active else {
                 isConversationVisible = false
