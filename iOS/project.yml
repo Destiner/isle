@@ -4,6 +4,9 @@ options:
   deploymentTarget:
     iOS: "26.0"
 packages:
+  MCP:
+    url: https://github.com/modelcontextprotocol/swift-sdk.git
+    exactVersion: 0.12.1
   Roboport:
     path: ../Packages/Roboport
 settings:
@@ -20,7 +23,10 @@ targets:
     platform: iOS
     sources:
       - path: IsleMobile
+      - path: ../Shared
+        name: Shared
     dependencies:
+      - package: MCP
       - package: Roboport
     settings:
       base:
@@ -33,6 +39,8 @@ targets:
       path: IsleMobile/Info.plist
       properties:
         CFBundleDisplayName: Isle
+        NSCalendarsFullAccessUsageDescription: Isle uses your calendar to answer questions and manage events you request.
+        NSRemindersFullAccessUsageDescription: Isle uses your reminders to answer questions and manage reminders you request.
         UILaunchScreen: {}
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false

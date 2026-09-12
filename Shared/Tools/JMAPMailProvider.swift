@@ -43,9 +43,7 @@ actor JMAPMailProvider: MailProvider {
     private func requireClient() throws -> JMAPClient {
         if let client { return client }
         guard let token = tokenProvider(), !token.isEmpty else {
-            throw MailError.notConfigured(
-                "No Fastmail API token configured. Store it in the Keychain (service \"\(Keychain.service)\", "
-                + "account \"\(FastmailCredentials.keychainAccount)\") or set the ISLE_JMAP_TOKEN env var.")
+            throw MailError.notConfigured("No Fastmail API token configured.")
         }
         let client = JMAPClient(token: token)
         self.client = client

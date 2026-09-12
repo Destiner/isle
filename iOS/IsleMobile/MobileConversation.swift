@@ -1,6 +1,12 @@
 import Foundation
 import Roboport
 
+struct MobileAgentActivity: Identifiable, Sendable {
+    let id: Int
+    let icon: String
+    let label: String
+}
+
 struct ConversationTurn: Codable, Identifiable, Sendable {
     let id: UUID
     let question: String
@@ -19,6 +25,7 @@ struct ConversationTurn: Codable, Identifiable, Sendable {
 final class MobileConversation: ObservableObject {
     @Published private(set) var turns: [ConversationTurn]
     @Published private(set) var isResponding = false
+    @Published private(set) var activity: MobileAgentActivity?
 
     private struct StoredThread: Codable, Identifiable {
         let id: UUID
@@ -40,12 +47,18 @@ final class MobileConversation: ObservableObject {
 
         - Answer conversationally and get straight to the point.
         - Keep replies to one or two short paragraphs unless more is genuinely needed.
-        - Do not claim to access apps, personal data, or tools. None are available yet.
+        - Use Isle's available tools when the user asks for current or personal information.
         """
 
     private var archive: Archive
     private var session: Session?
     private var runningTask: Task<Void, Never>?
+    private var activityFlipTask: Task<Void, Never>?
+    private var pendingActivity: (icon: String, label: String)?
+    private var activityCounter = 0
+    private var activityShownAt: Date?
+
+    private let minimumActivityDisplay: TimeInterval = 1
 
     init() {
         if let data = UserDefaults.standard.data(forKey: Self.archiveKey),
@@ -70,6 +83,7 @@ final class MobileConversation: ObservableObject {
 
     deinit {
         runningTask?.cancel()
+        activityFlipTask?.cancel()
     }
 
     @discardableResult
@@ -81,6 +95,7 @@ final class MobileConversation: ObservableObject {
         let turnID = UUID()
         turns.append(ConversationTurn(id: turnID, question: prompt))
         isResponding = true
+        showActivity(icon: "ellipsis", label: "Thinking…")
 
         runningTask = Task { [weak self] in
             await self?.run(prompt: prompt, turnID: turnID)
@@ -97,10 +112,19 @@ final class MobileConversation: ObservableObject {
                 switch event {
                 case .textDelta(let delta):
                     streamedAnswer += delta
+                    clearActivity()
                     update(turnID: turnID, answer: streamedAnswer)
                 case .text(let completeText) where streamedAnswer.isEmpty:
                     streamedAnswer = completeText
+                    clearActivity()
                     update(turnID: turnID, answer: streamedAnswer)
+                case .thinkingDelta, .thinking:
+                    showActivity(icon: "ellipsis", label: "Thinking…")
+                case .toolCall(_, let name, _):
+                    let presentation = Self.presentation(forTool: name)
+                    showActivity(icon: presentation.icon, label: presentation.label)
+                case .toolResult:
+                    showActivity(icon: "ellipsis", label: "Thinking…")
                 default:
                     break
                 }
@@ -116,8 +140,81 @@ final class MobileConversation: ObservableObject {
             update(turnID: turnID, answer: MobileAgentError.message(for: error), isError: true)
         }
 
+        clearActivity()
         isResponding = false
         runningTask = nil
+    }
+
+    private func showActivity(icon: String, label: String) {
+        if activity?.icon == icon, activity?.label == label, pendingActivity == nil { return }
+        if pendingActivity?.icon == icon, pendingActivity?.label == label { return }
+
+        if activity == nil || Date().timeIntervalSince(activityShownAt ?? .distantPast) >= minimumActivityDisplay {
+            applyActivity(icon: icon, label: label)
+            return
+        }
+
+        pendingActivity = (icon, label)
+        activityFlipTask?.cancel()
+        let elapsed = Date().timeIntervalSince(activityShownAt ?? .distantPast)
+        let delay = max(0, minimumActivityDisplay - elapsed)
+        activityFlipTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(delay))
+            guard !Task.isCancelled, let self, let pending = self.pendingActivity else { return }
+            self.applyActivity(icon: pending.icon, label: pending.label)
+        }
+    }
+
+    private func applyActivity(icon: String, label: String) {
+        activityFlipTask?.cancel()
+        activityFlipTask = nil
+        pendingActivity = nil
+        activityCounter += 1
+        activity = MobileAgentActivity(id: activityCounter, icon: icon, label: label)
+        activityShownAt = Date()
+    }
+
+    private func clearActivity() {
+        activityFlipTask?.cancel()
+        activityFlipTask = nil
+        pendingActivity = nil
+        activity = nil
+        activityShownAt = nil
+    }
+
+    private static func presentation(forTool name: String) -> (icon: String, label: String) {
+        switch name {
+        case "web_search", "web.search":
+            ("globe", "Searching the web…")
+        case "command_execution":
+            ("terminal", "Running a command…")
+        case "file_change":
+            ("pencil", "Editing files…")
+        case "create_reminder":
+            ("checklist", "Creating a reminder…")
+        case "edit_reminder":
+            ("checklist", "Updating reminders…")
+        case "list_calendars":
+            ("calendar", "Checking calendars…")
+        case "list_events", "get_event":
+            ("calendar", "Checking your calendar…")
+        case "create_event", "edit_event":
+            ("calendar.badge.plus", "Updating your calendar…")
+        default:
+            if name.contains("calendar") || name.contains("event") {
+                ("calendar", "Checking your calendar…")
+            } else if name.contains("reminder") {
+                ("checklist", "Checking reminders…")
+            } else if name.contains("note") {
+                ("note.text", "Checking your notes…")
+            } else if name.contains("mail") || name.contains("email") {
+                ("envelope", "Checking mail…")
+            } else if name.hasPrefix("browser") {
+                ("safari", "Browsing…")
+            } else {
+                ("wrench.and.screwdriver", "Working…")
+            }
+        }
     }
 
     private func makeSession() throws -> Session {
@@ -133,12 +230,20 @@ final class MobileConversation: ObservableObject {
             referer: "https://github.com/Destiner/isle",
             title: "Isle"
         )
+        let now = ISO8601DateFormatter().string(from: Date())
         let agent = Agent(
             config: AgentConfig(
                 model: model,
-                system: Self.systemPrompt,
-                toolProviders: [],
-                maxIterations: 2
+                system: """
+                    \(Self.systemPrompt)
+
+                    Current date and time: \(now)
+                    Current time zone: \(TimeZone.current.identifier)
+
+                    \(MobileToolSet.guidance)
+                    """,
+                toolProviders: [StaticToolProvider(MobileToolSet.tools())],
+                maxIterations: 16
             )
         )
         let history = turns.dropLast().flatMap { turn -> [Message] in

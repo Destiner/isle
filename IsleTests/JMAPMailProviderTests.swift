@@ -4,12 +4,40 @@
 //
 
 import Foundation
+import MCP
+import Roboport
 import Testing
 @testable import Isle
 
 /// Covers the pure, server-free seams of `JMAPMailProvider`: email parsing, address
 /// formatting, mailbox resolution, filter building, and the opaque id codec.
+@MainActor
 struct JMAPMailProviderTests {
+    @Test func readOnlySurfaceDoesNotExposeWrites() {
+        let surface = MailTools(
+            service: MailService(
+                provider: JMAPMailProvider(tokenProvider: { nil })
+            ),
+            allowedToolNames: MailTools.readOnlyToolNames
+        )
+        let names = Set(surface.agentTools(allowing: MailTools.readOnlyToolNames).map(\.name))
+
+        #expect(names == ["search_emails", "list_emails", "get_email", "list_mailboxes"])
+        #expect(names.isDisjoint(with: ["send_email", "create_draft", "mark_read"]))
+    }
+
+    @Test func readOnlySurfaceRejectsWriteDispatch() async {
+        let surface = MailTools(
+            service: MailService(
+                provider: JMAPMailProvider(tokenProvider: { nil })
+            ),
+            allowedToolNames: MailTools.readOnlyToolNames
+        )
+
+        let result = await surface.call(name: "send_email", arguments: nil)
+        #expect(result.isError == true)
+    }
+
     private static let session = JMAPClient.Session(
         apiURL: URL(string: "https://api.fastmail.com/jmap/api/")!,
         accountId: "u123",

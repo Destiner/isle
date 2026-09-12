@@ -20,11 +20,8 @@ protocol IsleToolSurface: Sendable {
     func call(name: String, arguments: [String: MCP.Value]?) async -> CallTool.Result
 }
 
-extension ReminderTools: IsleToolSurface {}
-extension CalendarTools: IsleToolSurface {}
 extension NotesTools: IsleToolSurface {}
 extension MusicTools: IsleToolSurface {}
-extension MailTools: IsleToolSurface {}
 extension BrowserTools: IsleToolSurface {}
 
 extension IsleToolSurface {

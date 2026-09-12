@@ -44,6 +44,28 @@ nonisolated enum MobileKeychain {
     }
 }
 
+nonisolated enum MobileFastmailCredentials {
+    private static let account = "fastmail-jmap-token"
+
+    static func bootstrapFromEnvironment() {
+        guard let token = ProcessInfo.processInfo.environment["ISLE_JMAP_TOKEN"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+              !token.isEmpty else { return }
+        MobileKeychain.set(token, account: account)
+    }
+
+    static var token: String? {
+        if let token = ProcessInfo.processInfo.environment["ISLE_JMAP_TOKEN"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+           !token.isEmpty {
+            MobileKeychain.set(token, account: account)
+            return token
+        }
+
+        return MobileKeychain.string(account: account)
+    }
+}
+
 nonisolated enum MobileOpenRouterCredentials {
     private static let account = "openrouter-api-key"
 

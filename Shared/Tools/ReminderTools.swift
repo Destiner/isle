@@ -81,6 +81,7 @@ nonisolated struct ReminderTools: Sendable {
     /// Any thrown error becomes an `isError` result carrying a readable message.
     /// Every call is logged here — the single choke point for Codex's tool use.
     func call(name: String, arguments: [String: Value]?) async -> CallTool.Result {
+        #if os(macOS)
         let start = Date()
         let result = await dispatch(name: name, arguments: arguments)
         let chars = result.content.reduce(0) { acc, item in
@@ -91,6 +92,9 @@ nonisolated struct ReminderTools: Sendable {
                  isError: result.isError == true, resultChars: chars,
                  durationMs: Int(Date().timeIntervalSince(start) * 1000))
         return result
+        #else
+        return await dispatch(name: name, arguments: arguments)
+        #endif
     }
 
     /// Converts MCP call arguments into a Foundation JSON object so they log as a

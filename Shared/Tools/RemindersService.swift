@@ -59,10 +59,11 @@ actor RemindersService {
             ? store.predicateForReminders(in: calendars)
             : store.predicateForIncompleteReminders(
                 withDueDateStarting: nil, ending: nil, calendars: calendars)
-        let reminders: [EKReminder] = await withCheckedContinuation { continuation in
-            store.fetchReminders(matching: predicate) { continuation.resume(returning: $0 ?? []) }
+        return await withCheckedContinuation { continuation in
+            store.fetchReminders(matching: predicate) { reminders in
+                continuation.resume(returning: (reminders ?? []).map(Self.dto(from:)))
+            }
         }
-        return reminders.map(Self.dto(from:))
     }
 
     /// Reminders whose title or notes contain `query` (case-insensitive).

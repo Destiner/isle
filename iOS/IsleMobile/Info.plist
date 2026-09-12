@@ -20,6 +20,10 @@
 	<string>1.0</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>Isle uses your calendar to answer questions and manage events you request.</string>
+	<key>NSRemindersFullAccessUsageDescription</key>
+	<string>Isle uses your reminders to answer questions and manage reminders you request.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

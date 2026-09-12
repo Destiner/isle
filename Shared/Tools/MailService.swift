@@ -61,10 +61,8 @@ enum MailError: LocalizedError {
     }
 }
 
-/// The backend behind the mail tools. Mail.app is itself the provider abstraction —
-/// it fronts whatever accounts (Fastmail, Gmail, iCloud…) the user has configured —
-/// so `AppleMailProvider` is the only provider for now; the protocol is the seam a
-/// direct Gmail/JMAP client would slot behind later.
+/// The backend behind the mail tools. macOS can use Mail.app as an all-account,
+/// offline provider; both apps can use Fastmail directly through JMAP.
 protocol MailProvider: Sendable {
     func list(mailbox: String?, account: String?, limit: Int, unreadOnly: Bool) async throws -> [EmailDTO]
     func search(query: String, mailbox: String?, account: String?, limit: Int, unreadOnly: Bool) async throws -> [EmailDTO]
@@ -81,7 +79,8 @@ protocol MailProvider: Sendable {
 actor MailService {
     private let provider: MailProvider
 
-    init(provider: MailProvider = AppleMailProvider()) {
+    /// The app chooses its platform-appropriate provider explicitly.
+    init(provider: MailProvider) {
         self.provider = provider
     }
 

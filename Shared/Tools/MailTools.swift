@@ -12,9 +12,13 @@ import MCP
 /// text block, errors as `isError` results with a readable message.
 nonisolated struct MailTools: Sendable {
     let service: MailService
+    var allowedToolNames: Set<String>? = nil
 
     /// Names this provider owns, so the shared server can route `tools/call` to it.
     static let toolNames: Set<String> = Set(tools.map(\.name))
+    static let readOnlyToolNames: Set<String> = [
+        "search_emails", "list_emails", "get_email", "list_mailboxes",
+    ]
 
     static let tools: [Tool] = [
         Tool(
@@ -101,6 +105,11 @@ nonisolated struct MailTools: Sendable {
     /// Routes a `tools/call` to the matching service method and packages the result,
     /// logging every call (the choke point for Codex's mail use).
     func call(name: String, arguments: [String: Value]?) async -> CallTool.Result {
+        guard allowedToolNames?.contains(name) ?? true else {
+            return Self.error("Email writes aren't available in this app.")
+        }
+
+        #if os(macOS)
         let start = Date()
         let result = await dispatch(name: name, arguments: arguments)
         let chars = result.content.reduce(0) { acc, item in
@@ -111,6 +120,9 @@ nonisolated struct MailTools: Sendable {
                  isError: result.isError == true, resultChars: chars,
                  durationMs: Int(Date().timeIntervalSince(start) * 1000))
         return result
+        #else
+        return await dispatch(name: name, arguments: arguments)
+        #endif
     }
 
     private static func jsonObject(_ arguments: [String: Value]?) -> Any {

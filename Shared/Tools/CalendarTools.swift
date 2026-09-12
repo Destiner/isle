@@ -93,6 +93,7 @@ nonisolated struct CalendarTools: Sendable {
     ]
 
     func call(name: String, arguments: [String: Value]?) async -> CallTool.Result {
+        #if os(macOS)
         let start = Date()
         let result = await dispatch(name: name, arguments: arguments)
         let chars = result.content.reduce(0) { total, item in
@@ -103,6 +104,9 @@ nonisolated struct CalendarTools: Sendable {
                        isError: result.isError == true, resultChars: chars,
                        durationMs: Int(Date().timeIntervalSince(start) * 1000))
         return result
+        #else
+        return await dispatch(name: name, arguments: arguments)
+        #endif
     }
 
     private func dispatch(name: String, arguments: [String: Value]?) async -> CallTool.Result {

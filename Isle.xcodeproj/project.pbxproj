@@ -40,6 +40,11 @@
 			path = Isle;
 			sourceTree = "<group>";
 		};
+		AACC0000000000000000AA01 /* Shared */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Shared;
+			sourceTree = "<group>";
+		};
 		5149286B2FF3092D00A139AE /* IsleTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = IsleTests;
@@ -83,6 +88,7 @@
 			isa = PBXGroup;
 			children = (
 				5149285B2FF3092900A139AE /* Isle */,
+				AACC0000000000000000AA01 /* Shared */,
 				5149286B2FF3092D00A139AE /* IsleTests */,
 				514928752FF3092D00A139AE /* IsleUITests */,
 				5149285A2FF3092900A139AE /* Products */,
@@ -116,6 +122,7 @@
 			);
 			fileSystemSynchronizedGroups = (
 				5149285B2FF3092900A139AE /* Isle */,
+				AACC0000000000000000AA01 /* Shared */,
 			);
 			name = Isle;
 			packageProductDependencies = (

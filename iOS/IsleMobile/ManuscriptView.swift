@@ -29,8 +29,13 @@ struct ManuscriptView: View {
                     ScrollView {
                         LazyVStack(alignment: .leading, spacing: 0) {
                             ForEach(conversation.turns) { turn in
-                                ManuscriptTurn(turn: turn)
-                                    .padding(.bottom, 42)
+                                ManuscriptTurn(
+                                    turn: turn,
+                                    activity: turn.id == conversation.turns.last?.id && turn.answer == nil
+                                        ? conversation.activity
+                                        : nil
+                                )
+                                .padding(.bottom, 42)
                             }
 
                             ComposerInput(
@@ -96,6 +101,7 @@ struct ManuscriptView: View {
 
 private struct ManuscriptTurn: View {
     let turn: ConversationTurn
+    let activity: MobileAgentActivity?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -108,12 +114,39 @@ private struct ManuscriptTurn: View {
                     Text(answer)
                         .contentTransition(.opacity)
                 } else {
-                    Text("Thinking…")
-                        .foregroundStyle(.secondary)
+                    AgentActivityRow(
+                        activity: activity ?? MobileAgentActivity(
+                            id: 0,
+                            icon: "ellipsis",
+                            label: "Thinking…"
+                        )
+                    )
+                    .id(activity?.id ?? 0)
+                    .transition(.blurReplace)
                 }
             }
             .font(.system(size: 16, design: .serif))
             .lineSpacing(6)
+        }
+    }
+}
+
+private struct AgentActivityRow: View {
+    let activity: MobileAgentActivity
+
+    var body: some View {
+        HStack(spacing: 9) {
+            Image(systemName: activity.icon)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.secondary)
+                .frame(width: 16)
+                .symbolEffect(.variableColor.iterative, options: .repeating)
+
+            Text(activity.label)
+                .font(.system(size: 14, weight: .regular, design: .serif))
+                .foregroundStyle(.secondary)
+
+            Spacer(minLength: 0)
         }
     }
 }
