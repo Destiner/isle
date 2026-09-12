@@ -1,5 +1,6 @@
 import Foundation
 
+#if os(macOS)
 /// Runs a shell command in the session's working directory.
 ///
 /// The command is **not sandboxed**: it runs with the host process's full
@@ -218,3 +219,4 @@ private final class OutputCollector: @unchecked Sendable {
         return String(data: err, encoding: .utf8) ?? ""
     }
 }
+#endif

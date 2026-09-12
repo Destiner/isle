@@ -12,8 +12,10 @@ public actor MCPToolProvider: ToolProvider {
     public enum Transport: Sendable {
         /// Streamable HTTP (or SSE) endpoint.
         case http(URL)
+        #if os(macOS)
         /// A server spawned as a child process speaking stdio.
         case stdio(executable: String, arguments: [String])
+        #endif
     }
 
     private let clientName: String
@@ -67,6 +69,7 @@ public actor MCPToolProvider: ToolProvider {
         switch transport {
         case .http(let url):
             _ = try await client.connect(transport: HTTPClientTransport(endpoint: url))
+        #if os(macOS)
         case .stdio(let executable, let arguments):
             let process = Process()
             process.executableURL = URL(fileURLWithPath: executable)
@@ -80,6 +83,7 @@ public actor MCPToolProvider: ToolProvider {
                 transport: StdioTransport(
                     input: FileDescriptor(rawValue: output.fileHandleForReading.fileDescriptor),
                     output: FileDescriptor(rawValue: input.fileHandleForWriting.fileDescriptor)))
+        #endif
         }
         self.client = client
         return client

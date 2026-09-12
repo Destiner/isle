@@ -1,0 +1,370 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		2E2294B246435620CBC6403A /* Credentials.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3BD315B3DC854343CD8550C /* Credentials.swift */; };
+		5180CC1CD7686EB88F2DB5FE /* MobileConversation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A94E8B35DA8A584B33651694 /* MobileConversation.swift */; };
+		5B063257C0B8E7508DE36305 /* IsleMobileApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD118E2FEA1314AD0DDDA1E9 /* IsleMobileApp.swift */; };
+		941FD6E6681BC5F68B824CC5 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 588A1E7529F1422E331D311D /* ContentView.swift */; };
+		9B75DA1C35F6A415215EAC77 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 0AA585427C7462D17A809083 /* Assets.xcassets */; };
+		AF4C9859C2ECB5E056F0B2E8 /* Roboport in Frameworks */ = {isa = PBXBuildFile; productRef = 56FC76418879DD382D11C387 /* Roboport */; };
+		F4529D53346179222019BE67 /* ManuscriptView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCC96AD978919D366D7A492A /* ManuscriptView.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		0AA585427C7462D17A809083 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		588A1E7529F1422E331D311D /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		A94E8B35DA8A584B33651694 /* MobileConversation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileConversation.swift; sourceTree = "<group>"; };
+		C4DA4447EEC31AC66F7532CE /* IsleMobile.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = IsleMobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		CCC96AD978919D366D7A492A /* ManuscriptView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManuscriptView.swift; sourceTree = "<group>"; };
+		DD118E2FEA1314AD0DDDA1E9 /* IsleMobileApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IsleMobileApp.swift; sourceTree = "<group>"; };
+		E3BD315B3DC854343CD8550C /* Credentials.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Credentials.swift; sourceTree = "<group>"; };
+		E5986400CF7EE8AF5847AAA0 /* Roboport */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Roboport; path = ../Packages/Roboport; sourceTree = SOURCE_ROOT; };
+		F1E2E3EB896218AB82CBC05B /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		3228210CE56D2D04E3804BE2 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AF4C9859C2ECB5E056F0B2E8 /* Roboport in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		16360B76D68B0C1E7F6780D1 /* IsleMobile */ = {
+			isa = PBXGroup;
+			children = (
+				0AA585427C7462D17A809083 /* Assets.xcassets */,
+				588A1E7529F1422E331D311D /* ContentView.swift */,
+				E3BD315B3DC854343CD8550C /* Credentials.swift */,
+				F1E2E3EB896218AB82CBC05B /* Info.plist */,
+				DD118E2FEA1314AD0DDDA1E9 /* IsleMobileApp.swift */,
+				CCC96AD978919D366D7A492A /* ManuscriptView.swift */,
+				A94E8B35DA8A584B33651694 /* MobileConversation.swift */,
+			);
+			path = IsleMobile;
+			sourceTree = "<group>";
+		};
+		1FF5E8DC530D852CDAF71ADC /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+				E5986400CF7EE8AF5847AAA0 /* Roboport */,
+			);
+			name = Packages;
+			sourceTree = "<group>";
+		};
+		5233BC0C95267C797A2A01E1 = {
+			isa = PBXGroup;
+			children = (
+				16360B76D68B0C1E7F6780D1 /* IsleMobile */,
+				1FF5E8DC530D852CDAF71ADC /* Packages */,
+				794C65BC71DE1D18DF277B16 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		794C65BC71DE1D18DF277B16 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				C4DA4447EEC31AC66F7532CE /* IsleMobile.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		C73E56E707119B5545E3466C /* IsleMobile */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 6D5EA1A87EA874901D60C41D /* Build configuration list for PBXNativeTarget "IsleMobile" */;
+			buildPhases = (
+				BDA8BA9E12DD29CAE0E47031 /* Sources */,
+				6FD5651CEEA307E1C1A2F77A /* Resources */,
+				3228210CE56D2D04E3804BE2 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = IsleMobile;
+			packageProductDependencies = (
+				56FC76418879DD382D11C387 /* Roboport */,
+			);
+			productName = IsleMobile;
+			productReference = C4DA4447EEC31AC66F7532CE /* IsleMobile.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		368B4C2ADE150AAE651D7456 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					C73E56E707119B5545E3466C = {
+						DevelopmentTeam = HQR74263JL;
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = FC48C4B17A966A0206F286C5 /* Build configuration list for PBXProject "IsleMobile" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 5233BC0C95267C797A2A01E1;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				3F8982CB822B1FB620A1A781 /* XCLocalSwiftPackageReference "../Packages/Roboport" */,
+			);
+			preferredProjectObjectVersion = 77;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				C73E56E707119B5545E3466C /* IsleMobile */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		6FD5651CEEA307E1C1A2F77A /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				9B75DA1C35F6A415215EAC77 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		BDA8BA9E12DD29CAE0E47031 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				941FD6E6681BC5F68B824CC5 /* ContentView.swift in Sources */,
+				2E2294B246435620CBC6403A /* Credentials.swift in Sources */,
+				5B063257C0B8E7508DE36305 /* IsleMobileApp.swift in Sources */,
+				F4529D53346179222019BE67 /* ManuscriptView.swift in Sources */,
+				5180CC1CD7686EB88F2DB5FE /* MobileConversation.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		27BF1057FB13F681FD05B30E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = HQR74263JL;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		7F7E512DBCEE631313020F76 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = HQR74263JL;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		B9A6776977835454B63A6060 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				INFOPLIST_FILE = IsleMobile/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = DestinerLabs.IsleMobile;
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		DB570E2483EC1C048ADC578A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				INFOPLIST_FILE = IsleMobile/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = DestinerLabs.IsleMobile;
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		6D5EA1A87EA874901D60C41D /* Build configuration list for PBXNativeTarget "IsleMobile" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B9A6776977835454B63A6060 /* Debug */,
+				DB570E2483EC1C048ADC578A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		FC48C4B17A966A0206F286C5 /* Build configuration list for PBXProject "IsleMobile" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				27BF1057FB13F681FD05B30E /* Debug */,
+				7F7E512DBCEE631313020F76 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		3F8982CB822B1FB620A1A781 /* XCLocalSwiftPackageReference "../Packages/Roboport" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../Packages/Roboport;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		56FC76418879DD382D11C387 /* Roboport */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Roboport;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 368B4C2ADE150AAE651D7456 /* Project object */;
+}

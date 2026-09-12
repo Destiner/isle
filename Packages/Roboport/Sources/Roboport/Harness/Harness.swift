@@ -27,7 +27,11 @@ public enum Harness {
         """
 
     public static func tools() -> [any Tool] {
+        #if os(macOS)
         [BashTool(), WebSearchTool()]
+        #else
+        []
+        #endif
     }
 
     public static func provider() -> any ToolProvider {

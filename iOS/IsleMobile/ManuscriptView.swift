@@ -1,0 +1,237 @@
+import Combine
+import SwiftUI
+import UIKit
+
+struct ManuscriptView: View {
+    @StateObject private var conversation = MobileConversation()
+    @State private var draft = ""
+    @State private var isComposerFocused = true
+    @State private var followsLatestResponse = true
+
+    var body: some View {
+        Group {
+            if conversation.turns.isEmpty {
+                VStack(alignment: .leading) {
+                    ComposerInput(
+                        text: $draft,
+                        isFocused: $isComposerFocused,
+                        placeholder: "Ask anything…",
+                        fontSize: 20,
+                        onSubmit: submit
+                    )
+
+                    Spacer()
+                }
+                .padding(.horizontal, 28)
+                .padding(.top, 32)
+            } else {
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 0) {
+                            ForEach(conversation.turns) { turn in
+                                ManuscriptTurn(turn: turn)
+                                    .padding(.bottom, 42)
+                            }
+
+                            ComposerInput(
+                                text: $draft,
+                                isFocused: $isComposerFocused,
+                                placeholder: "Follow up…",
+                                fontSize: 20,
+                                onSubmit: submit
+                            )
+
+                            Color.clear
+                                .frame(height: 36)
+                                .id("bottom")
+                        }
+                        .padding(.horizontal, 28)
+                        .padding(.top, 32)
+                    }
+                    .scrollDismissesKeyboard(.interactively)
+                    .onScrollGeometryChange(for: Bool.self) { geometry in
+                        let distanceFromBottom = geometry.contentSize.height
+                            - geometry.contentOffset.y
+                            - geometry.containerSize.height
+                        return distanceFromBottom < 96
+                    } action: { _, isNearBottom in
+                        followsLatestResponse = isNearBottom
+                    }
+                    .onChange(of: conversation.turns.count) {
+                        followsLatestResponse = true
+                        withAnimation(.easeOut(duration: 0.3)) {
+                            proxy.scrollTo("bottom", anchor: .bottom)
+                        }
+                    }
+                    .onChange(of: conversation.turns.last?.answer) {
+                        guard followsLatestResponse else { return }
+                        proxy.scrollTo("bottom", anchor: .bottom)
+                    }
+                    .onReceive(
+                        NotificationCenter.default.publisher(
+                            for: UIResponder.keyboardDidShowNotification
+                        )
+                    ) { _ in
+                        guard isComposerFocused else { return }
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            proxy.scrollTo("bottom", anchor: .bottom)
+                        }
+                    }
+                }
+            }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            isComposerFocused = false
+        }
+        .background(Color.manuscriptPaper)
+        .onAppear { isComposerFocused = true }
+    }
+
+    private func submit() {
+        guard conversation.submit(draft) else { return }
+        draft = ""
+    }
+}
+
+private struct ManuscriptTurn: View {
+    let turn: ConversationTurn
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            Text(turn.question)
+                .font(.system(size: 20, weight: .regular, design: .serif))
+                .lineSpacing(5)
+
+            Group {
+                if let answer = turn.answer {
+                    Text(answer)
+                        .contentTransition(.opacity)
+                } else {
+                    Text("Thinking…")
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .font(.system(size: 16, design: .serif))
+            .lineSpacing(6)
+        }
+    }
+}
+
+private struct ComposerInput: View {
+    @Binding var text: String
+    @Binding var isFocused: Bool
+
+    let placeholder: String
+    let fontSize: CGFloat
+    let onSubmit: () -> Void
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            SubmitTextView(
+                text: $text,
+                isFocused: $isFocused,
+                fontSize: fontSize,
+                onSubmit: onSubmit
+            )
+
+            if text.isEmpty {
+                Text(placeholder)
+                    .font(.system(size: fontSize, design: .serif))
+                    .foregroundStyle(.tertiary)
+                    .allowsHitTesting(false)
+            }
+        }
+    }
+}
+
+private struct SubmitTextView: UIViewRepresentable {
+    @Binding var text: String
+    @Binding var isFocused: Bool
+
+    let fontSize: CGFloat
+    let onSubmit: () -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(parent: self)
+    }
+
+    func makeUIView(context: Context) -> UITextView {
+        let textView = UITextView()
+        textView.delegate = context.coordinator
+        textView.backgroundColor = .clear
+        textView.tintColor = .label
+        textView.font = serifFont(size: fontSize)
+        textView.isScrollEnabled = false
+        textView.returnKeyType = .send
+        textView.textContainerInset = .zero
+        textView.textContainer.lineFragmentPadding = 0
+        textView.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        return textView
+    }
+
+    func updateUIView(_ textView: UITextView, context: Context) {
+        context.coordinator.parent = self
+
+        if textView.text != text {
+            textView.text = text
+        }
+
+        textView.font = serifFont(size: fontSize)
+
+        if isFocused, !textView.isFirstResponder {
+            DispatchQueue.main.async {
+                textView.becomeFirstResponder()
+            }
+        } else if !isFocused, textView.isFirstResponder {
+            textView.resignFirstResponder()
+        }
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: UITextView, context: Context) -> CGSize? {
+        guard let width = proposal.width else { return nil }
+        let fittingSize = uiView.sizeThatFits(
+            CGSize(width: width, height: .greatestFiniteMagnitude)
+        )
+        return CGSize(width: width, height: min(max(fittingSize.height, fontSize + 8), 180))
+    }
+
+    private func serifFont(size: CGFloat) -> UIFont {
+        let descriptor = UIFont.systemFont(ofSize: size).fontDescriptor.withDesign(.serif)
+        return descriptor.map { UIFont(descriptor: $0, size: size) } ?? .systemFont(ofSize: size)
+    }
+
+    final class Coordinator: NSObject, UITextViewDelegate {
+        var parent: SubmitTextView
+
+        init(parent: SubmitTextView) {
+            self.parent = parent
+        }
+
+        func textViewDidChange(_ textView: UITextView) {
+            parent.text = textView.text
+        }
+
+        func textViewDidBeginEditing(_ textView: UITextView) {
+            parent.isFocused = true
+        }
+
+        func textViewDidEndEditing(_ textView: UITextView) {
+            parent.isFocused = false
+        }
+
+        func textView(
+            _ textView: UITextView,
+            shouldChangeTextIn range: NSRange,
+            replacementText: String
+        ) -> Bool {
+            guard replacementText == "\n" else { return true }
+            parent.onSubmit()
+            return false
+        }
+    }
+}
+
+private extension Color {
+    static let manuscriptPaper = Color(red: 0.975, green: 0.969, blue: 0.945)
+}
