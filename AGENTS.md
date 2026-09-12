@@ -67,7 +67,7 @@ macOS source is grouped by responsibility under `Isle/` (`App/`, `UI/`, `Input/`
 
 ### iOS/
 
-- `iOS/IsleMobile/ManuscriptView.swift` - The document-like mobile conversation UI and inline thinking/tool activity row. Assistant answers use the same shared `MarkdownText` renderer as macOS, with an adaptive foreground for the light manuscript canvas.
+- `iOS/IsleMobile/ManuscriptView.swift` - The document-like mobile conversation UI and inline thinking/tool activity row. It uses the macOS app's black, white, and translucent-white palette; assistant answers use the same shared `MarkdownText` renderer.
 - `iOS/IsleMobile/MobileConversation.swift` - Persisted mobile threads plus the streaming Roboport session. Builds a tool-enabled session with current date/time context and maps tool events into the inline activity row.
 - `iOS/IsleMobile/MobileTools.swift` - The iOS v1 tool policy: web search, shared Calendar and Reminders tools, and the read-only subset of Fastmail tools. Mail tools are omitted when no JMAP token is configured.
 - `iOS/IsleMobile/Credentials.swift` - Device-Keychain storage and one-time environment bootstrap for the OpenRouter key and Fastmail JMAP token.

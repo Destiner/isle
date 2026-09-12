@@ -90,7 +90,7 @@ struct ManuscriptView: View {
         .onTapGesture {
             isComposerFocused = false
         }
-        .background(Color.manuscriptPaper)
+        .background(Color.black.ignoresSafeArea())
         .onAppear { isComposerFocused = true }
         .onChange(of: scenePhase, initial: true) { _, phase in
             guard phase == .active else { return }
@@ -112,11 +112,12 @@ private struct ManuscriptTurn: View {
         VStack(alignment: .leading, spacing: 18) {
             Text(turn.question)
                 .font(.system(size: 20, weight: .regular, design: .serif))
+                .foregroundStyle(.white)
                 .lineSpacing(5)
 
             Group {
                 if let answer = turn.answer {
-                    MarkdownText(markdown: answer, textColor: .primary)
+                    MarkdownText(markdown: answer)
                         .contentTransition(.opacity)
                 } else {
                     AgentActivityRow(
@@ -141,13 +142,13 @@ private struct AgentActivityRow: View {
         HStack(spacing: 9) {
             Image(systemName: activity.icon)
                 .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.white.opacity(0.7))
                 .frame(width: 16)
                 .symbolEffect(.variableColor.iterative, options: .repeating)
 
             Text(activity.label)
                 .font(.system(size: 14, weight: .regular, design: .serif))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.white.opacity(0.7))
 
             Spacer(minLength: 0)
         }
@@ -174,7 +175,7 @@ private struct ComposerInput: View {
             if text.isEmpty {
                 Text(placeholder)
                     .font(.system(size: fontSize, design: .serif))
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(.white.opacity(0.35))
                     .allowsHitTesting(false)
             }
         }
@@ -196,7 +197,8 @@ private struct SubmitTextView: UIViewRepresentable {
         let textView = UITextView()
         textView.delegate = context.coordinator
         textView.backgroundColor = .clear
-        textView.tintColor = .label
+        textView.textColor = .white
+        textView.tintColor = .white
         textView.font = serifFont(size: fontSize)
         textView.isScrollEnabled = false
         textView.returnKeyType = .send
@@ -266,8 +268,4 @@ private struct SubmitTextView: UIViewRepresentable {
             return false
         }
     }
-}
-
-private extension Color {
-    static let manuscriptPaper = Color(red: 0.975, green: 0.969, blue: 0.945)
 }
