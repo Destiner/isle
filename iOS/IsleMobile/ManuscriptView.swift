@@ -8,6 +8,7 @@ struct ManuscriptView: View {
     @State private var draft = ""
     @State private var isComposerFocused = true
     @State private var followsLatestResponse = true
+    @State private var isConversationVisible = false
 
     var body: some View {
         Group {
@@ -91,10 +92,17 @@ struct ManuscriptView: View {
             isComposerFocused = false
         }
         .background(Color.black.ignoresSafeArea())
+        .opacity(scenePhase == .active && isConversationVisible ? 1 : 0)
+        .background(Color.black.ignoresSafeArea())
         .onAppear { isComposerFocused = true }
         .onChange(of: scenePhase, initial: true) { _, phase in
-            guard phase == .active else { return }
+            guard phase == .active else {
+                isConversationVisible = false
+                return
+            }
+
             conversation.startNewThreadIfIdle()
+            isConversationVisible = true
         }
     }
 
