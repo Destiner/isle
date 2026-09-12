@@ -75,11 +75,11 @@ struct ManuscriptView: View {
                     }
                     .onReceive(
                         NotificationCenter.default.publisher(
-                            for: UIResponder.keyboardDidShowNotification
+                            for: UIResponder.keyboardWillShowNotification
                         )
-                    ) { _ in
+                    ) { notification in
                         guard isComposerFocused else { return }
-                        withAnimation(.easeOut(duration: 0.2)) {
+                        withAnimation(keyboardAnimation(for: notification)) {
                             proxy.scrollTo("bottom", anchor: .bottom)
                         }
                     }
@@ -101,6 +101,25 @@ struct ManuscriptView: View {
     private func submit() {
         guard conversation.submit(draft) else { return }
         draft = ""
+    }
+
+    private func keyboardAnimation(for notification: Notification) -> Animation {
+        let userInfo = notification.userInfo
+        let duration = (userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? NSNumber)?
+            .doubleValue ?? 0.25
+        let curveValue = (userInfo?[UIResponder.keyboardAnimationCurveUserInfoKey] as? NSNumber)?
+            .intValue ?? UIView.AnimationCurve.easeInOut.rawValue
+
+        switch UIView.AnimationCurve(rawValue: curveValue) {
+        case .easeIn:
+            return .easeIn(duration: duration)
+        case .easeOut:
+            return .easeOut(duration: duration)
+        case .linear:
+            return .linear(duration: duration)
+        default:
+            return .easeInOut(duration: duration)
+        }
     }
 }
 
