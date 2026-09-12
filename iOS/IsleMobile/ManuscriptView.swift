@@ -3,6 +3,7 @@ import SwiftUI
 import UIKit
 
 struct ManuscriptView: View {
+    @Environment(\.scenePhase) private var scenePhase
     @StateObject private var conversation = MobileConversation()
     @State private var draft = ""
     @State private var isComposerFocused = true
@@ -91,6 +92,10 @@ struct ManuscriptView: View {
         }
         .background(Color.manuscriptPaper)
         .onAppear { isComposerFocused = true }
+        .onChange(of: scenePhase, initial: true) { _, phase in
+            guard phase == .active else { return }
+            conversation.startNewThreadIfIdle()
+        }
     }
 
     private func submit() {

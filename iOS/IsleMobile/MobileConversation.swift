@@ -268,8 +268,9 @@ final class MobileConversation: ObservableObject {
         turns.removeAll { $0.id == turnID }
     }
 
-    private func startNewThreadIfIdle() {
-        guard let active = archive.threads.first(where: { $0.id == archive.activeThreadID }),
+    func startNewThreadIfIdle() {
+        guard !isResponding,
+              let active = archive.threads.first(where: { $0.id == archive.activeThreadID }),
               Date().timeIntervalSince(active.updatedAt) >= Self.idleTimeout else {
             return
         }
