@@ -12,6 +12,7 @@
 		1F09CF517BB9611568802333 /* MailTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28D7E8C8E70EFD09C3720BA5 /* MailTools.swift */; };
 		255404BCF2226A426743F036 /* JMAPClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D0A97AFD2105E52B15E8EE1 /* JMAPClient.swift */; };
 		2E2294B246435620CBC6403A /* Credentials.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3BD315B3DC854343CD8550C /* Credentials.swift */; };
+		37F4E335A43D87F98E092E16 /* MarkdownText.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF427BEF0CF844253F46CF23 /* MarkdownText.swift */; };
 		5180CC1CD7686EB88F2DB5FE /* MobileConversation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A94E8B35DA8A584B33651694 /* MobileConversation.swift */; };
 		5B063257C0B8E7508DE36305 /* IsleMobileApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD118E2FEA1314AD0DDDA1E9 /* IsleMobileApp.swift */; };
 		93FE14F5CEA5808090DAFEC0 /* ReminderTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4BADD17DA62344EA78D53E5 /* ReminderTools.swift */; };
@@ -43,6 +44,7 @@
 		CCC96AD978919D366D7A492A /* ManuscriptView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManuscriptView.swift; sourceTree = "<group>"; };
 		D81A23A2DB02B2F290FD005D /* PersonalToolSurface.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalToolSurface.swift; sourceTree = "<group>"; };
 		DD118E2FEA1314AD0DDDA1E9 /* IsleMobileApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IsleMobileApp.swift; sourceTree = "<group>"; };
+		DF427BEF0CF844253F46CF23 /* MarkdownText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownText.swift; sourceTree = "<group>"; };
 		E2A7A5BD2495E40BA0F11031 /* JMAPMailProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JMAPMailProvider.swift; sourceTree = "<group>"; };
 		E3BD315B3DC854343CD8550C /* Credentials.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Credentials.swift; sourceTree = "<group>"; };
 		E5986400CF7EE8AF5847AAA0 /* Roboport */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Roboport; path = ../Packages/Roboport; sourceTree = SOURCE_ROOT; };
@@ -66,6 +68,7 @@
 			isa = PBXGroup;
 			children = (
 				58B79B171CA9784EAC6E8C95 /* Tools */,
+				7A82FA9742800FCC81A68AA8 /* UI */,
 			);
 			name = Shared;
 			path = ../Shared;
@@ -126,6 +129,14 @@
 				C4DA4447EEC31AC66F7532CE /* IsleMobile.app */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		7A82FA9742800FCC81A68AA8 /* UI */ = {
+			isa = PBXGroup;
+			children = (
+				DF427BEF0CF844253F46CF23 /* MarkdownText.swift */,
+			);
+			path = UI;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -216,6 +227,7 @@
 				AE45A35B18C4ED2A3D23C61C /* MailService.swift in Sources */,
 				1F09CF517BB9611568802333 /* MailTools.swift in Sources */,
 				F4529D53346179222019BE67 /* ManuscriptView.swift in Sources */,
+				37F4E335A43D87F98E092E16 /* MarkdownText.swift in Sources */,
 				5180CC1CD7686EB88F2DB5FE /* MobileConversation.swift in Sources */,
 				EA6D1E579B4E45D5ACCAD0F2 /* MobileTools.swift in Sources */,
 				1D077607AAD6A70EC2494E25 /* PersonalToolSurface.swift in Sources */,

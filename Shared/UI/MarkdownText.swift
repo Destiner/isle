@@ -38,7 +38,10 @@ struct MarkdownText: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            ForEach(MarkdownParser.parse(markdown)) { block in
+            ForEach(MarkdownParser.parse(
+                markdown,
+                inlineCodeBackground: textColor.opacity(0.12)
+            )) { block in
                 blockView(block)
             }
         }
@@ -247,7 +250,14 @@ struct MarkdownBlock: Identifiable {
 /// through to a paragraph, so unknown syntax degrades to plain (inline-styled)
 /// text rather than breaking.
 enum MarkdownParser {
-    static func parse(_ text: String) -> [MarkdownBlock] {
+    static func parse(
+        _ text: String,
+        inlineCodeBackground: Color = .white.opacity(0.12)
+    ) -> [MarkdownBlock] {
+        func inline(_ string: String) -> AttributedString {
+            styledInline(string, background: inlineCodeBackground)
+        }
+
         var blocks: [MarkdownBlock] = []
         var counter = 0
         func emit(_ kind: MarkdownBlock.Kind) {
@@ -378,7 +388,10 @@ enum MarkdownParser {
     /// styled `AttributedString`. SwiftUI's `Text` honors the resulting
     /// `inlinePresentationIntent` runs, so bold/italic/code render without us
     /// touching fonts. Inline code spans also get a faint background.
-    private static func inline(_ string: String) -> AttributedString {
+    private static func styledInline(
+        _ string: String,
+        background: Color
+    ) -> AttributedString {
         let options = AttributedString.MarkdownParsingOptions(
             allowsExtendedAttributes: true,
             interpretedSyntax: .inlineOnlyPreservingWhitespace,
@@ -388,7 +401,7 @@ enum MarkdownParser {
             return AttributedString(string)
         }
         for run in attributed.runs where run.inlinePresentationIntent?.contains(.code) == true {
-            attributed[run.range].backgroundColor = .white.opacity(0.12)
+            attributed[run.range].backgroundColor = background
         }
         return attributed
     }
@@ -470,10 +483,13 @@ enum MarkdownParser {
         for cell in cells {
             let startsWithColon = cell.hasPrefix(":")
             let endsWithColon = cell.hasSuffix(":")
+            let colonCount = (startsWithColon ? 1 : 0) + (endsWithColon ? 1 : 0)
+            guard cell.count >= colonCount + 2 else { return nil }
+
             var dashes = cell
             if startsWithColon { dashes.removeFirst() }
             if endsWithColon { dashes.removeLast() }
-            guard dashes.count >= 3, dashes.allSatisfy({ $0 == "-" }) else { return nil }
+            guard dashes.allSatisfy({ $0 == "-" }) else { return nil }
             alignments.append(startsWithColon && endsWithColon ? .center : endsWithColon ? .right : .left)
         }
         return alignments

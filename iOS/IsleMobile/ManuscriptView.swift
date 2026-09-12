@@ -111,7 +111,7 @@ private struct ManuscriptTurn: View {
 
             Group {
                 if let answer = turn.answer {
-                    Text(answer)
+                    MarkdownText(markdown: answer, textColor: .primary)
                         .contentTransition(.opacity)
                 } else {
                     AgentActivityRow(
@@ -125,8 +125,6 @@ private struct ManuscriptTurn: View {
                     .transition(.blurReplace)
                 }
             }
-            .font(.system(size: 16, design: .serif))
-            .lineSpacing(6)
         }
     }
 }

@@ -66,6 +66,27 @@ struct MarkdownParserTests {
         #expect(String(parsedTable.rows[0][1].characters) == "a|b")
     }
 
+    @Test func toleratesIncompleteTableAlignmentWhileStreaming() {
+        let blocks = MarkdownParser.parse("A | B\n--- | :")
+
+        guard case .paragraph = blocks.first?.kind else {
+            Issue.record("Expected an incomplete table to remain a paragraph")
+            return
+        }
+    }
+
+    @Test func acceptsCompactTableDelimitersFromModelResponses() throws {
+        let blocks = MarkdownParser.parse("""
+            | Feature | Status | Notes |
+            | :-- | :--: | --: |
+            | Tables | ✅ | Aligned right |
+            """)
+
+        let parsedTable = try #require(table(in: blocks))
+        #expect(parsedTable.alignments == [.left, .center, .right])
+        #expect(String(parsedTable.rows[0][0].characters) == "Tables")
+    }
+
     private func table(in blocks: [MarkdownBlock]) -> MarkdownBlock.Table? {
         for block in blocks {
             if case .table(let table) = block.kind { return table }
