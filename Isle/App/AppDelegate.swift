@@ -4,6 +4,7 @@
 //
 
 import AppKit
+import ServiceManagement
 import SwiftUI
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -65,6 +66,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Debug logging (no-op in Release; ISLE_LOG env var overrides the pref).
         Log.configure(enabled: preferences.enableLogging)
+
+        configureLaunchAtLogin()
 
         // Background agent: no Dock icon, no menu bar.
         NSApp.setActivationPolicy(.accessory)
@@ -136,6 +139,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // ⌘N while the pill is open clears the conversation and starts fresh.
         fnMonitor.onNewChat = { [weak self] in self?.newChat() }
         fnMonitor.start()
+    }
+
+    /// Reconcile the compile-time preference with macOS's login-item state.
+    /// Registration is subject to user approval; once disabled in System
+    /// Settings, Isle cannot silently override that decision.
+    private func configureLaunchAtLogin() {
+        // Register only a stable installed copy. Xcode runs and unit-test hosts
+        // execute from DerivedData; registering those would leave login pointing
+        // at a disposable build product instead of /Applications/Isle.app.
+        let bundleParent = Bundle.main.bundleURL.deletingLastPathComponent().standardizedFileURL
+        let applicationDirectories = [
+            URL(fileURLWithPath: "/Applications", isDirectory: true),
+            FileManager.default.homeDirectoryForCurrentUser
+                .appendingPathComponent("Applications", isDirectory: true)
+        ].map(\.standardizedFileURL)
+        guard applicationDirectories.contains(bundleParent) else { return }
+
+        let service = SMAppService.mainApp
+
+        do {
+            if preferences.launchAtLogin,
+               service.status == .notRegistered || service.status == .notFound {
+                try service.register()
+                Log.app("loginItem.registered")
+            } else if !preferences.launchAtLogin,
+                      service.status == .enabled || service.status == .requiresApproval {
+                try service.unregister()
+                Log.app("loginItem.unregistered")
+            }
+        } catch {
+            Log.error("loginItem.configure", error.localizedDescription)
+        }
     }
 
     /// Clear the conversation and start a fresh chat without closing the pill

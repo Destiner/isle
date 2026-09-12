@@ -28,6 +28,11 @@ struct Preferences {
     /// the next open starts fresh.
     var idleTimeout: TimeInterval = 5 * 60
 
+    /// Register Isle as a login item so it is ready after the user signs in.
+    /// macOS still owns the final approval and lets the user disable it in
+    /// System Settings › General › Login Items & Extensions.
+    var launchAtLogin: Bool = true
+
     /// Write structured debug logs (model turns, tool calls) to
     /// `~/Library/Application Support/Isle/logs/`. Debug builds only — the whole
     /// logging path compiles out of Release. The `ISLE_LOG` env var (`0`/`1`)
