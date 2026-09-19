@@ -11,6 +11,7 @@
 		1D077607AAD6A70EC2494E25 /* PersonalToolSurface.swift in Sources */ = {isa = PBXBuildFile; fileRef = D81A23A2DB02B2F290FD005D /* PersonalToolSurface.swift */; };
 		1F09CF517BB9611568802333 /* MailTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28D7E8C8E70EFD09C3720BA5 /* MailTools.swift */; };
 		255404BCF2226A426743F036 /* JMAPClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D0A97AFD2105E52B15E8EE1 /* JMAPClient.swift */; };
+		27E66EB4ACA281440E315016 /* MapService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCD27648C1AA643A6427C625 /* MapService.swift */; };
 		2E2294B246435620CBC6403A /* Credentials.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3BD315B3DC854343CD8550C /* Credentials.swift */; };
 		37F4E335A43D87F98E092E16 /* MarkdownText.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF427BEF0CF844253F46CF23 /* MarkdownText.swift */; };
 		5180CC1CD7686EB88F2DB5FE /* MobileConversation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A94E8B35DA8A584B33651694 /* MobileConversation.swift */; };
@@ -23,6 +24,7 @@
 		B08CEEBC257415B8F1A4A596 /* JMAPMailProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2A7A5BD2495E40BA0F11031 /* JMAPMailProvider.swift */; };
 		E442D131E01047E615F3FB01 /* CalendarTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89C4965A5C8CCCA3CDB7A1D1 /* CalendarTools.swift */; };
 		EA6D1E579B4E45D5ACCAD0F2 /* MobileTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68511A3D508E1850228DB332 /* MobileTools.swift */; };
+		F3401331D97FC17286AF0E96 /* MapTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = AECA11155CD5EFF9E1FC49C5 /* MapTools.swift */; };
 		F4529D53346179222019BE67 /* ManuscriptView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCC96AD978919D366D7A492A /* ManuscriptView.swift */; };
 		F923BDDBD28BB8E15AC2141F /* CalendarService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21905075BA5360847FD6061F /* CalendarService.swift */; };
 		FFD3EA8644E8AA6630AC405D /* RemindersService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 575D0D96B7E82B77C72D8C02 /* RemindersService.swift */; };
@@ -39,6 +41,8 @@
 		89C4965A5C8CCCA3CDB7A1D1 /* CalendarTools.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarTools.swift; sourceTree = "<group>"; };
 		A4BADD17DA62344EA78D53E5 /* ReminderTools.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReminderTools.swift; sourceTree = "<group>"; };
 		A94E8B35DA8A584B33651694 /* MobileConversation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileConversation.swift; sourceTree = "<group>"; };
+		AECA11155CD5EFF9E1FC49C5 /* MapTools.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapTools.swift; sourceTree = "<group>"; };
+		BCD27648C1AA643A6427C625 /* MapService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapService.swift; sourceTree = "<group>"; };
 		C4DA4447EEC31AC66F7532CE /* IsleMobile.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = IsleMobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C705149CE074907A474DD5F5 /* MailService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MailService.swift; sourceTree = "<group>"; };
 		CCC96AD978919D366D7A492A /* ManuscriptView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManuscriptView.swift; sourceTree = "<group>"; };
@@ -116,6 +120,8 @@
 				E2A7A5BD2495E40BA0F11031 /* JMAPMailProvider.swift */,
 				C705149CE074907A474DD5F5 /* MailService.swift */,
 				28D7E8C8E70EFD09C3720BA5 /* MailTools.swift */,
+				BCD27648C1AA643A6427C625 /* MapService.swift */,
+				AECA11155CD5EFF9E1FC49C5 /* MapTools.swift */,
 				D81A23A2DB02B2F290FD005D /* PersonalToolSurface.swift */,
 				575D0D96B7E82B77C72D8C02 /* RemindersService.swift */,
 				A4BADD17DA62344EA78D53E5 /* ReminderTools.swift */,
@@ -227,6 +233,8 @@
 				AE45A35B18C4ED2A3D23C61C /* MailService.swift in Sources */,
 				1F09CF517BB9611568802333 /* MailTools.swift in Sources */,
 				F4529D53346179222019BE67 /* ManuscriptView.swift in Sources */,
+				27E66EB4ACA281440E315016 /* MapService.swift in Sources */,
+				F3401331D97FC17286AF0E96 /* MapTools.swift in Sources */,
 				37F4E335A43D87F98E092E16 /* MarkdownText.swift in Sources */,
 				5180CC1CD7686EB88F2DB5FE /* MobileConversation.swift in Sources */,
 				EA6D1E579B4E45D5ACCAD0F2 /* MobileTools.swift in Sources */,

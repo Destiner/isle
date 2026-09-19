@@ -22,6 +22,8 @@
 	<string>1</string>
 	<key>NSCalendarsFullAccessUsageDescription</key>
 	<string>Isle uses your calendar to answer questions and manage events you request.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Isle uses your location to find nearby places and estimate travel time when you ask.</string>
 	<key>NSRemindersFullAccessUsageDescription</key>
 	<string>Isle uses your reminders to answer questions and manage reminders you request.</string>
 	<key>UIApplicationSceneManifest</key>

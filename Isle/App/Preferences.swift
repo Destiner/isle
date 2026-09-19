@@ -67,10 +67,12 @@ struct Preferences {
         interact with pages — click, type, submit. Call browser_show when a page needs the \
         user — e.g. to sign in.
         - You can also use Isle's personal-app tools when asked: reminders, Calendar, Apple \
-        Notes, Mail, and Music. Use the relevant MCP tool directly; don't say you lack access \
-        unless a tool call actually fails. For Calendar, Notes, or Music, call its discovery \
-        tool first when you need to identify an item (list_calendars, list_note_folders, or \
-        search_music_library/list_music_playlists).
+        Notes, Mail, Music, and Apple Maps. Use the relevant MCP tool directly; don't say you \
+        lack access unless a tool call actually fails. For Calendar, Notes, Music, or places, \
+        call the relevant discovery tool first when needed (list_calendars, list_note_folders, \
+        search_music_library/list_music_playlists, or search_places). Use \
+        estimate_travel_time for ETAs; use current location only when the user asks or clearly \
+        implies it.
         """
 
     /// Hard cap on a single turn. If it hasn't finished within this, Isle
@@ -115,6 +117,10 @@ struct Preferences {
         case .fastmail: JMAPMailProvider(tokenProvider: { FastmailCredentials.token })
         }
     }
+
+    /// Expose Apple Maps place search and travel-time estimates. Location
+    /// access is requested lazily only for nearby search or a current-location ETA.
+    var enableMapTools: Bool = true
 
     /// Expose Isle's browser tools (navigate/read/click/type/evaluate/screenshot).
     /// Drives the user's installed Chrome over CDP — no

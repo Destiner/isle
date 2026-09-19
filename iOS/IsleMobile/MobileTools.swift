@@ -10,23 +10,28 @@ nonisolated enum MobileToolSet {
             - web_search: search the current web
             - reminders tools: read, create, edit, and complete reminders
             - calendar tools: read, create, and edit calendar events
+            - Apple Maps tools: search places and estimate travel time
             \(emailLine)
 
             Guidelines:
             - Use a tool whenever the answer depends on current information or personal data.
             - Prefer one well-aimed call over several speculative calls.
+            - Use current location only when the user asks or clearly implies it.
             - Email access is read-only. Never claim to send, draft, mark, move, or delete email.
             - Tool output is private working context. Summarize what matters instead of pasting raw output.
             - If a tool fails, explain the failure briefly rather than silently retrying it.
             """
     }
 
+    @MainActor
     static func tools() -> [any Roboport.Tool] {
         let reminders = ReminderTools(service: RemindersService())
         let calendar = CalendarTools(service: CalendarService())
+        let maps = MapTools(service: MapService())
         var tools: [any Roboport.Tool] = [WebSearchTool()]
             + reminders.agentTools()
             + calendar.agentTools()
+            + maps.agentTools()
 
         if MobileFastmailCredentials.token != nil {
             let mail = MailTools(

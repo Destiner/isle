@@ -200,6 +200,10 @@ final class MobileConversation: ObservableObject {
             ("calendar", "Checking your calendar…")
         case "create_event", "edit_event":
             ("calendar.badge.plus", "Updating your calendar…")
+        case "search_places":
+            ("map", "Searching places…")
+        case "estimate_travel_time":
+            ("map", "Checking travel time…")
         default:
             if name.contains("calendar") || name.contains("event") {
                 ("calendar", "Checking your calendar…")
@@ -209,6 +213,8 @@ final class MobileConversation: ObservableObject {
                 ("note.text", "Checking your notes…")
             } else if name.contains("mail") || name.contains("email") {
                 ("envelope", "Checking mail…")
+            } else if name.contains("place") || name.contains("travel") {
+                ("map", "Checking Apple Maps…")
             } else if name.hasPrefix("browser") {
                 ("safari", "Browsing…")
             } else {

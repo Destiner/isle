@@ -23,6 +23,7 @@ protocol IsleToolSurface: Sendable {
 extension NotesTools: IsleToolSurface {}
 extension MusicTools: IsleToolSurface {}
 extension BrowserTools: IsleToolSurface {}
+extension MapTools: IsleToolSurface {}
 
 extension IsleToolSurface {
     /// This provider's tools, wrapped for the agent. Dispatch goes straight to
@@ -50,6 +51,7 @@ enum IsleToolSet {
         var music: MusicTools?
         var mail: MailTools?
         var browser: BrowserTools?
+        var maps: MapTools?
     }
 
     static func tools(from providers: Providers) -> [any Roboport.Tool] {
@@ -60,6 +62,7 @@ enum IsleToolSet {
         if let value = providers.music { tools += value.agentTools() }
         if let value = providers.mail { tools += value.agentTools() }
         if let value = providers.browser { tools += value.agentTools() }
+        if let value = providers.maps { tools += value.agentTools() }
         return tools
     }
 }

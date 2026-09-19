@@ -48,6 +48,10 @@ enum ToolPresentation {
             return ("music.note.list", "Searching Music…")
         case "send_email", "create_draft":
             return ("paperplane", "Working on email…")
+        case "search_places":
+            return ("map", "Searching places…")
+        case "estimate_travel_time":
+            return ("map", "Checking travel time…")
         case "browser_navigate":
             return ("safari", "Browsing…")
         default:
@@ -58,6 +62,7 @@ enum ToolPresentation {
             if name.contains("note") { return ("note.text", "Checking your notes…") }
             if name.contains("music") { return ("music.note", "Checking Music…") }
             if name.contains("mail") || name.contains("email") { return ("envelope", "Checking mail…") }
+            if name.contains("place") || name.contains("travel") { return ("map", "Checking Apple Maps…") }
             if name.hasPrefix("browser") { return ("safari", "Browsing…") }
             return ("wrench.and.screwdriver", "Working…")
         }

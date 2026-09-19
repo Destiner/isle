@@ -40,6 +40,7 @@ targets:
       properties:
         CFBundleDisplayName: Isle
         NSCalendarsFullAccessUsageDescription: Isle uses your calendar to answer questions and manage events you request.
+        NSLocationWhenInUseUsageDescription: Isle uses your location to find nearby places and estimate travel time when you ask.
         NSRemindersFullAccessUsageDescription: Isle uses your reminders to answer questions and manage reminders you request.
         UILaunchScreen: {}
         UIUserInterfaceStyle: Dark

@@ -42,7 +42,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             ? BrowserTools(
                 service: BrowserService(
                     port: preferences.chromeDebuggingPort,
-                    headless: preferences.chromeHeadless)) : nil)
+                    headless: preferences.chromeHeadless)) : nil,
+        maps: preferences.enableMapTools ? MapTools(service: MapService()) : nil)
 
     // The conversation is cleared after the pill sits closed past
     // `preferences.idleTimeout`. Armed on hide, cancelled on show.

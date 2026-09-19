@@ -9,6 +9,7 @@ protocol PersonalToolSurface: Sendable {
 extension ReminderTools: PersonalToolSurface {}
 extension CalendarTools: PersonalToolSurface {}
 extension MailTools: PersonalToolSurface {}
+extension MapTools: PersonalToolSurface {}
 
 extension PersonalToolSurface {
     func agentTools(allowing allowedNames: Set<String>? = nil) -> [any Roboport.Tool] {
