@@ -12,84 +12,66 @@ struct ManuscriptView: View {
     @State private var followUpStartY: CGFloat?
 
     var body: some View {
-        Group {
-            if conversation.turns.isEmpty {
-                VStack(alignment: .leading) {
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    ForEach(conversation.turns) { turn in
+                        ManuscriptTurn(
+                            turn: turn,
+                            activity: turn.id == conversation.turns.last?.id && turn.answer == nil
+                                ? conversation.activity
+                                : nil
+                        )
+                        .padding(.bottom, 42)
+                    }
+
                     ComposerInput(
                         text: $draft,
                         isFocused: $isComposerFocused,
-                        placeholder: "Ask anything…",
+                        placeholder: conversation.turns.isEmpty ? "Ask anything…" : "Follow up…",
                         fontSize: 20,
                         onSubmit: submit
                     )
+                    .onGeometryChange(for: CGFloat.self) { geometry in
+                        geometry.frame(in: .named("manuscript")).minY
+                    } action: { _, minY in
+                        followUpStartY = minY
+                    }
 
-                    Spacer()
+                    Color.clear
+                        .frame(height: 36)
+                        .id("bottom")
                 }
                 .padding(.horizontal, 28)
                 .padding(.top, 32)
-            } else {
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        LazyVStack(alignment: .leading, spacing: 0) {
-                            ForEach(conversation.turns) { turn in
-                                ManuscriptTurn(
-                                    turn: turn,
-                                    activity: turn.id == conversation.turns.last?.id && turn.answer == nil
-                                        ? conversation.activity
-                                        : nil
-                                )
-                                .padding(.bottom, 42)
-                            }
-
-                            ComposerInput(
-                                text: $draft,
-                                isFocused: $isComposerFocused,
-                                placeholder: "Follow up…",
-                                fontSize: 20,
-                                onSubmit: submit
-                            )
-                            .onGeometryChange(for: CGFloat.self) { geometry in
-                                geometry.frame(in: .named("manuscript")).minY
-                            } action: { _, minY in
-                                followUpStartY = minY
-                            }
-
-                            Color.clear
-                                .frame(height: 36)
-                                .id("bottom")
-                        }
-                        .padding(.horizontal, 28)
-                        .padding(.top, 32)
-                    }
-                    .scrollDismissesKeyboard(.interactively)
-                    .onScrollGeometryChange(for: Bool.self) { geometry in
-                        let distanceFromBottom = geometry.contentSize.height
-                            - geometry.contentOffset.y
-                            - geometry.containerSize.height
-                        return distanceFromBottom < 96
-                    } action: { _, isNearBottom in
-                        followsLatestResponse = isNearBottom
-                    }
-                    .onChange(of: conversation.turns.count) {
-                        followsLatestResponse = true
-                        withAnimation(.easeOut(duration: 0.3)) {
-                            proxy.scrollTo("bottom", anchor: .bottom)
-                        }
-                    }
-                    .onChange(of: conversation.turns.last?.answer) {
-                        guard followsLatestResponse else { return }
-                        proxy.scrollTo("bottom", anchor: .bottom)
-                    }
-                    .onReceive(
-                        NotificationCenter.default.publisher(
-                            for: UIResponder.keyboardWillShowNotification
-                        )
-                    ) { notification in
-                        guard isComposerFocused else { return }
-                        withAnimation(keyboardAnimation(for: notification)) {
-                            proxy.scrollTo("bottom", anchor: .bottom)
-                        }
-                    }
+            }
+            .scrollDismissesKeyboard(.interactively)
+            .onScrollGeometryChange(for: Bool.self) { geometry in
+                let distanceFromBottom = geometry.contentSize.height
+                    - geometry.contentOffset.y
+                    - geometry.containerSize.height
+                return distanceFromBottom < 96
+            } action: { _, isNearBottom in
+                followsLatestResponse = isNearBottom
+            }
+            .onChange(of: conversation.turns.count) {
+                followsLatestResponse = true
+                withAnimation(.easeOut(duration: 0.3)) {
+                    proxy.scrollTo("bottom", anchor: .bottom)
+                }
+            }
+            .onChange(of: conversation.turns.last?.answer) {
+                guard followsLatestResponse else { return }
+                proxy.scrollTo("bottom", anchor: .bottom)
+            }
+            .onReceive(
+                NotificationCenter.default.publisher(
+                    for: UIResponder.keyboardWillShowNotification
+                )
+            ) { notification in
+                guard isComposerFocused else { return }
+                withAnimation(keyboardAnimation(for: notification)) {
+                    proxy.scrollTo("bottom", anchor: .bottom)
                 }
             }
         }
