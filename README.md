@@ -1,6 +1,8 @@
 # Isle
 
-A personal AI assistant for macOS and iOS. On Mac, tap **fn / 🌐** to open a small floating pill, type a request, and press Enter.
+A personal AI assistant for macOS and iOS.
+
+https://github.com/user-attachments/assets/87d07a5b-06e3-49e5-ac81-d816c25507e2
 
 ## How it works
 
@@ -15,4 +17,3 @@ Conversations carry context across turns. API credentials are stored in Keychain
 - **OpenRouter** for model inference
 - **EventKit, MapKit, AppleScript, and Fastmail’s JMAP API** for personal tools
 - **Chrome DevTools Protocol** for browser automation
-- **Model Context Protocol (MCP)** for tool definitions and external integrations
