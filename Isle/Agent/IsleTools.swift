@@ -5,7 +5,7 @@
 
 import Foundation
 import MCP
-import Roboport
+import Robo
 
 /// The shape every Isle tool provider already has: a set of MCP `Tool`
 /// declarations and an async dispatch by name.
@@ -28,7 +28,7 @@ extension MapTools: IsleToolSurface {}
 extension IsleToolSurface {
     /// This provider's tools, wrapped for the agent. Dispatch goes straight to
     /// `call` in-process — no server, no socket, no handshake.
-    func agentTools() -> [any Roboport.Tool] {
+    func agentTools() -> [any Robo.Tool] {
         Self.tools.map { declaration in
             MCPBridge.tool(declaration) { arguments in
                 let result = await call(name: declaration.name, arguments: arguments)
@@ -54,8 +54,8 @@ enum IsleToolSet {
         var maps: MapTools?
     }
 
-    static func tools(from providers: Providers) -> [any Roboport.Tool] {
-        var tools: [any Roboport.Tool] = []
+    static func tools(from providers: Providers) -> [any Robo.Tool] {
+        var tools: [any Robo.Tool] = []
         if let value = providers.reminders { tools += value.agentTools() }
         if let value = providers.calendar { tools += value.agentTools() }
         if let value = providers.notes { tools += value.agentTools() }

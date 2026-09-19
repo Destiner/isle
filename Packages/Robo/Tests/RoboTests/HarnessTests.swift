@@ -1,6 +1,6 @@
 import XCTest
 
-@testable import Roboport
+@testable import Robo
 
 private func context(
     cwd: String,
@@ -14,7 +14,7 @@ final class BashToolTests: XCTestCase {
 
     override func setUpWithError() throws {
         workdir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("roboport-bash-\(UUID().uuidString)").path
+            .appendingPathComponent("robo-bash-\(UUID().uuidString)").path
         try FileManager.default.createDirectory(
             atPath: workdir, withIntermediateDirectories: true)
     }
@@ -83,7 +83,7 @@ final class BashToolTests: XCTestCase {
 final class WebSearchToolTests: XCTestCase {
     func testFormatsHits() async throws {
         let ctx = context(cwd: "/tmp") { query, limit in
-            XCTAssertEqual(query, "roboport")
+            XCTAssertEqual(query, "robo")
             XCTAssertEqual(limit, 5)
             return [
                 SearchHit(title: "A", url: "https://a.example", text: "about a"),
@@ -91,7 +91,7 @@ final class WebSearchToolTests: XCTestCase {
             ]
         }
         let output = try await WebSearchTool().execute(
-            .object(["query": .string("roboport")]), context: ctx)
+            .object(["query": .string("robo")]), context: ctx)
         XCTAssertTrue(output.contains("https://a.example"))
         XCTAssertTrue(output.contains("about a"))
         XCTAssertTrue(output.contains("B"))

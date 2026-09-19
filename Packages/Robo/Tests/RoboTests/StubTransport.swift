@@ -1,6 +1,6 @@
 import Foundation
 
-@testable import Roboport
+@testable import Robo
 
 /// Replays canned SSE chunks and records what was sent, so adapters can be
 /// exercised without a live provider.

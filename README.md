@@ -13,7 +13,7 @@ Conversations carry context across turns. API credentials are stored in Keychain
 ## Tech stack
 
 - **Swift + SwiftUI**, with AppKit on macOS
-- **Roboport**, an in-tree Swift agent engine
+- **Robo**, an in-tree Swift agent engine
 - **OpenRouter** for model inference
 - **EventKit, MapKit, AppleScript, and Fastmail’s JMAP API** for personal tools
 - **Chrome DevTools Protocol** for browser automation

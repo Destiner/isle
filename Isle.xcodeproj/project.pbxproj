@@ -8,7 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		AABB0000000000000000AA03 /* MCP in Frameworks */ = {isa = PBXBuildFile; productRef = AABB0000000000000000AA02 /* MCP */; };
-		AADD0000000000000000AA03 /* Roboport in Frameworks */ = {isa = PBXBuildFile; productRef = AADD0000000000000000AA02 /* Roboport */; };
+		AADD0000000000000000AA03 /* Robo in Frameworks */ = {isa = PBXBuildFile; productRef = AADD0000000000000000AA02 /* Robo */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -63,7 +63,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				AABB0000000000000000AA03 /* MCP in Frameworks */,
-				AADD0000000000000000AA03 /* Roboport in Frameworks */,
+				AADD0000000000000000AA03 /* Robo in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -127,7 +127,7 @@
 			name = Isle;
 			packageProductDependencies = (
 				AABB0000000000000000AA02 /* MCP */,
-				AADD0000000000000000AA02 /* Roboport */,
+				AADD0000000000000000AA02 /* Robo */,
 			);
 			productName = Isle;
 			productReference = 514928592FF3092900A139AE /* Isle.app */;
@@ -151,7 +151,7 @@
 			);
 			name = IsleTests;
 			packageProductDependencies = (
-				AADD0000000000000000AA04 /* Roboport */,
+				AADD0000000000000000AA04 /* Robo */,
 				AABB0000000000000000AA04 /* MCP */,
 			);
 			productName = IsleTests;
@@ -215,7 +215,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				AABB0000000000000000AA01 /* XCRemoteSwiftPackageReference "swift-sdk" */,
-				AADD0000000000000000AA01 /* XCLocalSwiftPackageReference "Packages/Roboport" */,
+				AADD0000000000000000AA01 /* XCLocalSwiftPackageReference "Packages/Robo" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 5149285A2FF3092900A139AE /* Products */;
@@ -609,9 +609,9 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		AADD0000000000000000AA01 /* XCLocalSwiftPackageReference "Packages/Roboport" */ = {
+		AADD0000000000000000AA01 /* XCLocalSwiftPackageReference "Packages/Robo" */ = {
 			isa = XCLocalSwiftPackageReference;
-			relativePath = Packages/Roboport;
+			relativePath = Packages/Robo;
 		};
 /* End XCLocalSwiftPackageReference section */
 
@@ -632,13 +632,13 @@
 			package = AABB0000000000000000AA01 /* XCRemoteSwiftPackageReference "swift-sdk" */;
 			productName = MCP;
 		};
-		AADD0000000000000000AA02 /* Roboport */ = {
+		AADD0000000000000000AA02 /* Robo */ = {
 			isa = XCSwiftPackageProductDependency;
-			productName = Roboport;
+			productName = Robo;
 		};
-		AADD0000000000000000AA04 /* Roboport */ = {
+		AADD0000000000000000AA04 /* Robo */ = {
 			isa = XCSwiftPackageProductDependency;
-			productName = Roboport;
+			productName = Robo;
 		};
 		AABB0000000000000000AA04 /* MCP */ = {
 			isa = XCSwiftPackageProductDependency;

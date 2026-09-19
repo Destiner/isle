@@ -4,7 +4,7 @@
 //
 
 import Foundation
-import Roboport
+import Robo
 
 /// Runs a turn against the model and returns the assistant's answer.
 ///
@@ -94,7 +94,7 @@ struct AgentEngine {
         model: String,
         thinking: ThinkingLevel,
         systemPrompt: String,
-        tools: [any Roboport.Tool],
+        tools: [any Robo.Tool],
         cwd: String,
         timeout: TimeInterval
     ) {

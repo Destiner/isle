@@ -1,6 +1,6 @@
 import XCTest
 
-@testable import Roboport
+@testable import Robo
 
 /// Records every tool call and returns canned output.
 final class RecordingTool: Tool, @unchecked Sendable {

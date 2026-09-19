@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		1860B0D5E6C7DB5020A49E14 /* Roboport in Frameworks */ = {isa = PBXBuildFile; productRef = 56FC76418879DD382D11C387 /* Roboport */; };
+		1860B0D5E6C7DB5020A49E14 /* Robo in Frameworks */ = {isa = PBXBuildFile; productRef = FEC63523DEEA37FC047DF92C /* Robo */; };
 		1D077607AAD6A70EC2494E25 /* PersonalToolSurface.swift in Sources */ = {isa = PBXBuildFile; fileRef = D81A23A2DB02B2F290FD005D /* PersonalToolSurface.swift */; };
 		1F09CF517BB9611568802333 /* MailTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28D7E8C8E70EFD09C3720BA5 /* MailTools.swift */; };
 		255404BCF2226A426743F036 /* JMAPClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D0A97AFD2105E52B15E8EE1 /* JMAPClient.swift */; };
@@ -35,6 +35,7 @@
 		1D0A97AFD2105E52B15E8EE1 /* JMAPClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JMAPClient.swift; sourceTree = "<group>"; };
 		21905075BA5360847FD6061F /* CalendarService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarService.swift; sourceTree = "<group>"; };
 		28D7E8C8E70EFD09C3720BA5 /* MailTools.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MailTools.swift; sourceTree = "<group>"; };
+		5577227054E383B0D3D22FB4 /* Robo */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Robo; path = ../Packages/Robo; sourceTree = SOURCE_ROOT; };
 		575D0D96B7E82B77C72D8C02 /* RemindersService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemindersService.swift; sourceTree = "<group>"; };
 		588A1E7529F1422E331D311D /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		68511A3D508E1850228DB332 /* MobileTools.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileTools.swift; sourceTree = "<group>"; };
@@ -51,7 +52,6 @@
 		DF427BEF0CF844253F46CF23 /* MarkdownText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownText.swift; sourceTree = "<group>"; };
 		E2A7A5BD2495E40BA0F11031 /* JMAPMailProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JMAPMailProvider.swift; sourceTree = "<group>"; };
 		E3BD315B3DC854343CD8550C /* Credentials.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Credentials.swift; sourceTree = "<group>"; };
-		E5986400CF7EE8AF5847AAA0 /* Roboport */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Roboport; path = ../Packages/Roboport; sourceTree = SOURCE_ROOT; };
 		F1E2E3EB896218AB82CBC05B /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -61,7 +61,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				AF4C9859C2ECB5E056F0B2E8 /* MCP in Frameworks */,
-				1860B0D5E6C7DB5020A49E14 /* Roboport in Frameworks */,
+				1860B0D5E6C7DB5020A49E14 /* Robo in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -96,7 +96,7 @@
 		1FF5E8DC530D852CDAF71ADC /* Packages */ = {
 			isa = PBXGroup;
 			children = (
-				E5986400CF7EE8AF5847AAA0 /* Roboport */,
+				5577227054E383B0D3D22FB4 /* Robo */,
 			);
 			name = Packages;
 			sourceTree = "<group>";
@@ -163,7 +163,7 @@
 			name = IsleMobile;
 			packageProductDependencies = (
 				EC708D01A06E445C7BC8DBA9 /* MCP */,
-				56FC76418879DD382D11C387 /* Roboport */,
+				FEC63523DEEA37FC047DF92C /* Robo */,
 			);
 			productName = IsleMobile;
 			productReference = C4DA4447EEC31AC66F7532CE /* IsleMobile.app */;
@@ -196,7 +196,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				B06DD812933A1201350BFD63 /* XCRemoteSwiftPackageReference "swift-sdk" */,
-				3F8982CB822B1FB620A1A781 /* XCLocalSwiftPackageReference "../Packages/Roboport" */,
+				4D0B367BDEB32B5E54EEE739 /* XCLocalSwiftPackageReference "../Packages/Robo" */,
 			);
 			preferredProjectObjectVersion = 77;
 			projectDirPath = "";
@@ -434,9 +434,9 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		3F8982CB822B1FB620A1A781 /* XCLocalSwiftPackageReference "../Packages/Roboport" */ = {
+		4D0B367BDEB32B5E54EEE739 /* XCLocalSwiftPackageReference "../Packages/Robo" */ = {
 			isa = XCLocalSwiftPackageReference;
-			relativePath = ../Packages/Roboport;
+			relativePath = ../Packages/Robo;
 		};
 /* End XCLocalSwiftPackageReference section */
 
@@ -452,14 +452,14 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		56FC76418879DD382D11C387 /* Roboport */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = Roboport;
-		};
 		EC708D01A06E445C7BC8DBA9 /* MCP */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = B06DD812933A1201350BFD63 /* XCRemoteSwiftPackageReference "swift-sdk" */;
 			productName = MCP;
+		};
+		FEC63523DEEA37FC047DF92C /* Robo */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Robo;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

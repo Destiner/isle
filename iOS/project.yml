@@ -7,8 +7,8 @@ packages:
   MCP:
     url: https://github.com/modelcontextprotocol/swift-sdk.git
     exactVersion: 0.12.1
-  Roboport:
-    path: ../Packages/Roboport
+  Robo:
+    path: ../Packages/Robo
 settings:
   base:
     DEVELOPMENT_TEAM: HQR74263JL
@@ -27,7 +27,7 @@ targets:
         name: Shared
     dependencies:
       - package: MCP
-      - package: Roboport
+      - package: Robo
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: DestinerLabs.IsleMobile

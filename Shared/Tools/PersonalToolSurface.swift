@@ -1,5 +1,5 @@
 import MCP
-import Roboport
+import Robo
 
 protocol PersonalToolSurface: Sendable {
     static var tools: [MCP.Tool] { get }
@@ -12,7 +12,7 @@ extension MailTools: PersonalToolSurface {}
 extension MapTools: PersonalToolSurface {}
 
 extension PersonalToolSurface {
-    func agentTools(allowing allowedNames: Set<String>? = nil) -> [any Roboport.Tool] {
+    func agentTools(allowing allowedNames: Set<String>? = nil) -> [any Robo.Tool] {
         Self.tools.compactMap { declaration in
             guard allowedNames?.contains(declaration.name) ?? true else { return nil }
             return MCPBridge.tool(declaration) { arguments in

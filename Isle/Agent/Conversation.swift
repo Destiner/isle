@@ -4,7 +4,7 @@
 //
 
 import Foundation
-import Roboport
+import Robo
 
 /// The running conversation: owns the model-facing history and sends each typed
 /// message to the agent, reporting the answer (or a failure) back through
@@ -18,10 +18,10 @@ final class Conversation {
     typealias ToolEvent = AgentEngine.ToolEvent
 
     private let preferences: Preferences
-    private let tools: [any Roboport.Tool]
+    private let tools: [any Robo.Tool]
     private var engine: AgentEngine?
 
-    init(preferences: Preferences, tools: [any Roboport.Tool]) {
+    init(preferences: Preferences, tools: [any Robo.Tool]) {
         self.preferences = preferences
         self.tools = tools
     }

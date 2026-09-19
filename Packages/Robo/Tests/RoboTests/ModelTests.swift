@@ -1,6 +1,6 @@
 import XCTest
 
-@testable import Roboport
+@testable import Robo
 
 /// Builds the SSE chunks a chat-completions provider would stream.
 enum Chunk {
@@ -296,7 +296,7 @@ final class OpenRouterTests: XCTestCase {
                 ])
             ]))
 
-        let hits = try await makeModel(transport).searchWeb("roboport", maxResults: 5)
+        let hits = try await makeModel(transport).searchWeb("robo", maxResults: 5)
         XCTAssertEqual(hits.count, 1, "duplicate urls should collapse")
         XCTAssertEqual(hits[0].url, "https://a.example")
         XCTAssertEqual(transport.lastBody["plugins"]?.arrayValue?.first?["id"]?.stringValue, "web")
@@ -309,7 +309,7 @@ final class OpenRouterTests: XCTestCase {
                 "choices": .array([.object(["message": .object(["content": .string("The answer.")])])])
             ]))
 
-        let hits = try await makeModel(transport).searchWeb("roboport", maxResults: nil)
+        let hits = try await makeModel(transport).searchWeb("robo", maxResults: nil)
         XCTAssertEqual(hits, [SearchHit(title: "Web search answer", text: "The answer.")])
     }
 }

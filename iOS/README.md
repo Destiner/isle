@@ -1,6 +1,6 @@
 # Isle for iOS
 
-A minimal, document-like iOS client for Isle. It uses the same in-tree Roboport agent and OpenRouter model as the macOS app, with web search, Calendar, Reminders, and read-only Fastmail tools. Completed threads are retained locally; after five idle minutes, Isle starts a new thread while keeping the previous one hidden for future history UI.
+A minimal, document-like iOS client for Isle. It uses the same in-tree Robo agent and OpenRouter model as the macOS app, with web search, Calendar, Reminders, and read-only Fastmail tools. Completed threads are retained locally; after five idle minutes, Isle starts a new thread while keeping the previous one hidden for future history UI.
 
 ## Credentials
 
