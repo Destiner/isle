@@ -139,6 +139,12 @@ enum Log {
              ["kind": kind, "detail": detail, "durationMs": durationMs])
     }
 
+    /// Per-attempt and per-tool timings; deliberately excludes prompts and payloads.
+    static func agentActivity(_ event: String, fields: [String: Any]) {
+        guard isEnabled else { return }
+        emit(.conversation, cat: "agent", event: event, level: .info, fields)
+    }
+
     // MARK: - Tools
 
     /// `arguments` is a Foundation JSON object (dict/array/scalar), embedded as a

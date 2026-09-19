@@ -79,7 +79,7 @@ struct Preferences {
     /// cancels the turn and surfaces a timeout rather than leaving the pill
     /// stuck on "thinking" forever. Generous on purpose: normal quick Q&A
     /// finishes in seconds, but a browser flow can legitimately run for minutes.
-    var turnTimeout: TimeInterval = 5 * 60
+    var turnTimeout: TimeInterval = 10 * 60
 
     // MARK: - Tools
 

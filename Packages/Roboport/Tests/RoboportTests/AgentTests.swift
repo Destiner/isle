@@ -105,6 +105,26 @@ final class AgentTests: XCTestCase {
 
         let events = try await drain(session, "use the tool")
 
+        let activity = events.compactMap { event -> String? in
+            switch event {
+            case .modelRequestStarted(let iteration, let attempt):
+                return "model.begin \(iteration).\(attempt)"
+            case .modelRequestEnded(let iteration, let attempt, let durationMs, let outcome):
+                XCTAssertGreaterThanOrEqual(durationMs, 0)
+                return "model.end \(iteration).\(attempt) \(outcome)"
+            case .toolCall(let id, _, _): return "tool.begin \(id)"
+            case .toolResult(let id, _, _, _): return "tool.end \(id)"
+            default: return nil
+            }
+        }
+        XCTAssertEqual(
+            activity,
+            [
+                "model.begin 1.1", "model.end 1.1 completed",
+                "tool.begin c1", "tool.end c1",
+                "model.begin 2.1", "model.end 2.1 completed",
+            ])
+
         XCTAssertEqual(tool.calls.count, 1)
         XCTAssertEqual(tool.calls[0]["x"]?.intValue, 1)
 
@@ -201,10 +221,22 @@ final class AgentTests: XCTestCase {
                 model: model, system: "s", toolProviders: [], maxIterations: 4, maxRetries: 2))
 
         var texts: [String] = []
+        var starts: [Int] = []
+        var outcomes: [String] = []
         for try await event in await session.send("hi") {
             if case .text(let value) = event { texts.append(value) }
+            if case .modelRequestStarted(let iteration, let attempt) = event {
+                XCTAssertEqual(iteration, 1)
+                starts.append(attempt)
+            }
+            if case .modelRequestEnded(_, _, let durationMs, let outcome) = event {
+                XCTAssertGreaterThanOrEqual(durationMs, 0)
+                outcomes.append(outcome)
+            }
         }
 
+        XCTAssertEqual(starts, [1, 2, 3])
+        XCTAssertEqual(outcomes, ["failed", "failed", "completed"])
         XCTAssertEqual(texts, ["recovered"])
         XCTAssertEqual(transport.attempts, 3, "two failures then a success")
     }

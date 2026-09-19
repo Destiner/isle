@@ -2,6 +2,8 @@ import Foundation
 
 /// What a caller observes while a turn runs.
 public enum TurnEvent: Sendable {
+    case modelRequestStarted(iteration: Int, attempt: Int)
+    case modelRequestEnded(iteration: Int, attempt: Int, durationMs: Int, outcome: String)
     case textDelta(String)
     case text(String)
     case thinkingDelta(String)
@@ -132,7 +134,8 @@ public actor Session {
             var calls: [(id: String, name: String, input: JSONValue)] = []
             var stopReason = StopReason.endTurn
 
-            let stream = try await streamWithRetry(params)
+            let stream = try await streamWithRetry(
+                params, iteration: iteration + 1, into: continuation)
             for try await event in stream {
                 try Task.checkCancellation()
                 switch event {
@@ -210,16 +213,31 @@ public actor Session {
     /// any event is consumed, so a failure mid-answer surfaces rather than
     /// replaying half of it.
     private func streamWithRetry(
-        _ params: CreateMessageParams
+        _ params: CreateMessageParams,
+        iteration: Int,
+        into events: AsyncThrowingStream<TurnEvent, Error>.Continuation
     ) async throws -> AsyncThrowingStream<ModelStreamEvent, Error> {
         var attempt = 0
         while true {
+            let requestAttempt = attempt + 1
+            let started = ContinuousClock.now
+            events.yield(.modelRequestStarted(iteration: iteration, attempt: requestAttempt))
+            let end: @Sendable (String) -> Void = { outcome in
+                let elapsed = started.duration(to: .now).components
+                let durationMs = Int(
+                    elapsed.seconds * 1000 + elapsed.attoseconds / 1_000_000_000_000_000)
+                events.yield(
+                    .modelRequestEnded(
+                        iteration: iteration, attempt: requestAttempt,
+                        durationMs: durationMs, outcome: outcome))
+            }
             do {
                 let stream = config.model.streamMessage(params)
                 // Pull the first event here so a connect-time failure is caught
                 // and retried rather than thrown to the consumer mid-iteration.
                 var iterator = stream.makeAsyncIterator()
                 guard let first = try await iterator.next() else {
+                    end("completed")
                     return AsyncThrowingStream { $0.finish() }
                 }
                 return AsyncThrowingStream { continuation in
@@ -229,16 +247,22 @@ public actor Session {
                             while let event = try await iterator.next() {
                                 continuation.yield(event)
                             }
+                            end(Task.isCancelled ? "cancelled" : "completed")
                             continuation.finish()
                         } catch {
+                            end(
+                                error is CancellationError || Task.isCancelled
+                                    ? "cancelled" : "failed")
                             continuation.finish(throwing: error)
                         }
                     }
                     continuation.onTermination = { _ in task.cancel() }
                 }
             } catch is CancellationError {
+                end("cancelled")
                 throw CancellationError()
             } catch {
+                end(Task.isCancelled ? "cancelled" : "failed")
                 let retryable = (error as? ModelError)?.isRetryable ?? false
                 attempt += 1
                 guard retryable, attempt <= config.maxRetries else { throw error }

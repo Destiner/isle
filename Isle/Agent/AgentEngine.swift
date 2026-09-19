@@ -130,13 +130,40 @@ struct AgentEngine {
         return try await withThrowingTaskGroup(of: String.self) { group in
             group.addTask {
                 var answer = ""
+                var toolStarts: [String: ContinuousClock.Instant] = [:]
                 for try await event in await session.send(prompt) {
                     switch event {
+                    case .modelRequestStarted(let iteration, let attempt):
+                        Log.agentActivity(
+                            "model.begin",
+                            fields: [
+                                "iteration": iteration, "attempt": attempt,
+                            ])
+                    case .modelRequestEnded(let iteration, let attempt, let durationMs, let outcome):
+                        Log.agentActivity(
+                            "model.end",
+                            fields: [
+                                "iteration": iteration, "attempt": attempt,
+                                "durationMs": durationMs, "outcome": outcome,
+                            ])
                     case .text(let text):
                         answer += answer.isEmpty ? text : "\n\(text)"
                     case .toolCall(let id, let name, _):
+                        toolStarts[id] = .now
+                        Log.agentActivity("tool.begin", fields: ["id": id, "tool": name])
                         onTool(.begin(id: id, key: name))
-                    case .toolResult(let id, _, _, _):
+                    case .toolResult(let id, let name, let output, let isError):
+                        var fields: [String: Any] = [
+                            "id": id, "tool": name, "isError": isError,
+                            "resultChars": output.count,
+                        ]
+                        if let started = toolStarts.removeValue(forKey: id) {
+                            let elapsed = started.duration(to: .now).components
+                            fields["durationMs"] = Int(
+                                elapsed.seconds * 1000 + elapsed.attoseconds / 1_000_000_000_000_000
+                            )
+                        }
+                        Log.agentActivity("tool.end", fields: fields)
                         onTool(.end(id: id))
                     default:
                         break
