@@ -47,7 +47,7 @@ struct Preferences {
     var thinking: ThinkingLevel = .low
 
     /// The model Isle runs, as an OpenRouter `author/slug`.
-    var model: String = "openai/gpt-5.6-sol"
+    var model: String = "openai/gpt-6-sol"
 
     /// Isle's system prompt, sent as the system message each turn. Tool-use
     /// guidance is appended by the engine, so this stays pure persona — tuned

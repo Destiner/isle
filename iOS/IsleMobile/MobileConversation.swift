@@ -41,7 +41,7 @@ final class MobileConversation: ObservableObject {
 
     private static let archiveKey = "isle.mobile.threads"
     private static let idleTimeout: TimeInterval = 5 * 60
-    private static let model = "openai/gpt-5.6-sol"
+    private static let model = "openai/gpt-6-sol"
     private static let systemPrompt = """
         You are Isle, a concise personal assistant on iPhone.
 

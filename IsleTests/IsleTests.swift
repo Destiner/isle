@@ -12,6 +12,12 @@ import Testing
 
 @testable import Isle
 
+struct PreferencesTests {
+    @Test func defaultModelIsSol6() {
+        #expect(Preferences().model == "openai/gpt-6-sol")
+    }
+}
+
 /// Covers `AgentEngine.EngineError.classify` — the mapping that turns a failed
 /// turn into the short line the pill shows. The pill has one line and no way to
 /// ask a question, so a wrong mapping is the difference between "API key
